@@ -1,0 +1,147 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  plan        String?  @default("free")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  users            User[]
+  workflows        Workflow[]
+  workflowRuns     WorkflowRun[]
+  integrations     IntegrationConnection[]
+  assignments      Assignment[]
+  attendance       Attendance[]
+  classSchedules   ClassSchedule[]
+  
+  @@map("organizations")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  clerkId       String   @unique
+  email         String
+  role          String   @default("teacher")
+  firstName     String?
+  lastName      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  createdAssignments Assignment[] @relation("AssignmentCreator")
+  recordedAttendance Attendance[]
+  
+  @@map("users")
+}
+
+model Assignment {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  attachments Json?
+  dueDate     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  createdByUserId String
+  createdByUser   User @relation("AssignmentCreator", fields: [createdByUserId], references: [id])
+  
+  @@map("assignments")
+}
+
+model Attendance {
+  id        String   @id @default(cuid())
+  studentId String
+  date      DateTime
+  status    String
+  createdAt DateTime @default(now())
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  recordedByUserId String
+  recordedByUser   User @relation(fields: [recordedByUserId], references: [id])
+  
+  @@map("attendance")
+}
+
+model Workflow {
+  id        String   @id @default(cuid())
+  name      String
+  nodes     Json
+  edges     Json
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  runs WorkflowRun[]
+  
+  @@map("workflows")
+}
+
+model WorkflowRun {
+  id        String   @id @default(cuid())
+  status    String   @default("PENDING")
+  logs      Json?
+  startedAt DateTime @default(now())
+  finishedAt DateTime?
+  
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  @@index([organizationId, startedAt(sort: Desc)])
+  @@index([workflowId, startedAt(sort: Desc)])
+  @@map("workflow_runs")
+}
+
+model IntegrationConnection {
+  id          String   @id @default(cuid())
+  type        String
+  credentials Json
+  meta        Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  @@unique([organizationId, type])
+  @@map("integration_connections")
+}
+
+model ClassSchedule {
+  id          String   @id @default(cuid())
+  classId     String
+  dayOfWeek   Int
+  startTime   String
+  endTime     String
+  subject     String
+  teacherId   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  @@index([organizationId, dayOfWeek])
+  @@map("class_schedules")
+}

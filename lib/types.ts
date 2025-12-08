@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export enum NodeType {
+  // Existing nodes
   HTTP_REQUEST = "http-request",
   SLACK_SEND = "slack-send",
   DISCORD_SEND = "discord-send",
@@ -15,6 +16,60 @@ export enum NodeType {
   SCHEDULE_CHECK = "schedule-check",
   ALERT_SEND = "alert-send",
   WHATSAPP_GROUP = "whatsapp-group",
+
+  // Triggers
+  TRIGGER_SCHEDULE = "trigger-schedule",
+  TRIGGER_WEBHOOK = "trigger-webhook",
+  TRIGGER_FORM = "trigger-form",
+  TRIGGER_EMAIL = "trigger-email",
+
+  // Google Suite
+  GOOGLE_CLASSROOM = "google-classroom",
+  GOOGLE_DRIVE = "google-drive",
+  GOOGLE_SHEETS = "google-sheets",
+  GOOGLE_CALENDAR = "google-calendar",
+  GOOGLE_MEET = "google-meet",
+  GOOGLE_FORMS = "google-forms",
+
+  // Microsoft 365
+  MICROSOFT_TEAMS = "microsoft-teams",
+  MICROSOFT_OUTLOOK = "microsoft-outlook",
+  MICROSOFT_ONEDRIVE = "microsoft-onedrive",
+  MICROSOFT_EXCEL = "microsoft-excel",
+
+  // Communication
+  TELEGRAM_SEND = "telegram-send",
+
+  // Video & Meetings
+  ZOOM_MEETING = "zoom-meeting",
+  ZOOM_RECORDING = "zoom-recording",
+
+  // Education
+  GRADE_CALCULATE = "grade-calculate",
+  STUDENT_NOTIFY = "student-notify",
+  QUIZ_CREATE = "quiz-create",
+  REPORT_GENERATE = "report-generate",
+
+  // AI & Analytics
+  AI_SUMMARIZE = "ai-summarize",
+  AI_TRANSLATE = "ai-translate",
+  AI_SENTIMENT = "ai-sentiment",
+  ANALYTICS_TRACK = "analytics-track",
+  CHART_GENERATE = "chart-generate",
+
+  // Data & Storage
+  DATABASE_QUERY = "database-query",
+  SPREADSHEET_UPDATE = "spreadsheet-update",
+  FILE_READ = "file-read",
+  FILE_WRITE = "file-write",
+  JSON_PARSE = "json-parse",
+
+  // Logic & Utility
+  LOOP = "loop",
+  FILTER = "filter",
+  SPLIT = "split",
+  MERGE = "merge",
+  TRANSFORM = "transform",
 }
 
 export interface WorkflowNode {
@@ -63,7 +118,11 @@ export type IntegrationConnectionType =
   | "google-classroom"
   | "slack"
   | "discord"
-  | "whatsapp";
+  | "whatsapp"
+  | "zoom"
+  | "microsoft"
+  | "telegram"
+  | "openai";
 
 export interface WorkflowExecutionPayload {
   workflowId: string;

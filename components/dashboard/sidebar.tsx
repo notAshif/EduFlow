@@ -13,7 +13,7 @@ import {
   UserCheck,
   Settings,
   Zap,
-  LogOut
+  Upload
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -27,6 +27,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Workflows', href: '/dashboard/workflows', icon: Workflow },
   { name: 'Integrations', href: '/dashboard/integration', icon: Plug },
+  { name: 'Import Data', href: '/dashboard/import', icon: Upload },
   { name: 'Assignments', href: '/dashboard/assignments', icon: FileText },
   { name: 'Attendance', href: '/dashboard/attendance', icon: UserCheck },
   { name: 'Schedule', href: '/dashboard/schedule', icon: Calendar },

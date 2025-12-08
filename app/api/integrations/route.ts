@@ -1,127 +1,131 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth";
-import { prisma } from "@/lib/db";
-import { z } from "zod";
-import { Prisma } from "@prisma/client";
+// app/api/integrations/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { getCurrentUser } from '@/lib/auth';
+import { prisma } from '@/lib/db';
 
-const Json: z.ZodType<any> = z.union([
-  z.string(),
-  z.number(),
-  z.boolean(),
-  z.null(),
-  z.lazy(() => z.array(Json)),
-  z.lazy(() => z.record(z.string(), Json)),
-]);
+// GET - List all integrations for the current user's organization
+export async function GET() {
+    try {
+        const user = await getCurrentUser();
+        if (!user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
 
-const createIntegrationSchema = z.object({
-  type: z.string(),
-  credentials: Json,
-  meta: Json.optional(),
-});
+        const integrations = await prisma.integrationConnection.findMany({
+            where: { organizationId: user.organizationId },
+            select: {
+                id: true,
+                type: true,
+                meta: true,
+                createdAt: true,
+                updatedAt: true,
+            }
+        });
 
-export async function GET(request: NextRequest) {
-  try {
-    const user = await requireAuth();
+        // Map integrations to include connection status
+        const integrationStatus = integrations.map(integration => ({
+            ...integration,
+            connected: true,
+        }));
 
-    const integrations = await prisma.integrationConnection.findMany({
-      where: {
-        organizationId: user.organizationId,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-
-    return NextResponse.json({
-      ok: true,
-      data: integrations,
-    });
-  } catch (error) {
-    console.error("Error fetching integrations:", error);
-
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 }
-      );
+        return NextResponse.json({ integrations: integrationStatus });
+    } catch (error) {
+        console.error('[INTEGRATIONS] Error fetching integrations:', error);
+        return NextResponse.json(
+            { error: 'Failed to fetch integrations' },
+            { status: 500 }
+        );
     }
-
-    return NextResponse.json(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
-  }
 }
 
+// POST - Create or update an integration connection
 export async function POST(request: NextRequest) {
-  try {
-    const user = await requireAuth();
+    try {
+        const user = await getCurrentUser();
+        if (!user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
 
-    const body = await request.json();
-    const { type, credentials, meta } = createIntegrationSchema.parse(body);
+        const body = await request.json();
+        const { type, credentials, meta } = body;
 
-    const existing = await prisma.integrationConnection.findFirst({
-      where: {
-        organizationId: user.organizationId,
-        type,
-      },
-    });
+        if (!type || !credentials) {
+            return NextResponse.json(
+                { error: 'Missing required fields: type, credentials' },
+                { status: 400 }
+            );
+        }
 
-    let integration;
-    if (existing) {
-      integration = await prisma.integrationConnection.update({
-        where: { id: existing.id },
-        data: {
-          credentials: credentials as unknown as Prisma.InputJsonValue,
-          meta: meta as unknown as Prisma.InputJsonValue,
-        },
-      });
-    } else {
-      integration = await prisma.integrationConnection.create({
-        data: {
-          type,
-          credentials: credentials as unknown as Prisma.InputJsonValue,
-          meta: meta as unknown as Prisma.InputJsonValue,
-          organizationId: user.organizationId,
-        },
-      });
+        // Upsert the integration connection
+        const integration = await prisma.integrationConnection.upsert({
+            where: {
+                organizationId_type: {
+                    organizationId: user.organizationId,
+                    type: type,
+                }
+            },
+            update: {
+                credentials,
+                meta: meta || {},
+                updatedAt: new Date(),
+            },
+            create: {
+                type,
+                credentials,
+                meta: meta || {},
+                organizationId: user.organizationId,
+            },
+        });
+
+        return NextResponse.json({
+            success: true,
+            integration: {
+                id: integration.id,
+                type: integration.type,
+                connected: true,
+                createdAt: integration.createdAt,
+            }
+        });
+    } catch (error) {
+        console.error('[INTEGRATIONS] Error saving integration:', error);
+        return NextResponse.json(
+            { error: 'Failed to save integration' },
+            { status: 500 }
+        );
     }
+}
 
-    return NextResponse.json({
-      ok: true,
-      data: integration,
-    });
-  } catch (error) {
-    console.error("Error creating integration:", error);
+// DELETE - Remove an integration connection
+export async function DELETE(request: NextRequest) {
+    try {
+        const user = await getCurrentUser();
+        if (!user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
 
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 }
-      );
+        const { searchParams } = new URL(request.url);
+        const type = searchParams.get('type');
+
+        if (!type) {
+            return NextResponse.json(
+                { error: 'Missing required parameter: type' },
+                { status: 400 }
+            );
+        }
+
+        await prisma.integrationConnection.deleteMany({
+            where: {
+                organizationId: user.organizationId,
+                type: type,
+            }
+        });
+
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        console.error('[INTEGRATIONS] Error deleting integration:', error);
+        return NextResponse.json(
+            { error: 'Failed to delete integration' },
+            { status: 500 }
+        );
     }
-
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Validation error",
-          details: error.issues,
-        },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 }
-    );
-  }
 }

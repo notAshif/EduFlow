@@ -6,53 +6,75 @@ export async function getCurrentUser(): Promise<User | null> {
   try {
     const { userId } = await auth();
 
-    // Dev mode bypass for curl testing
-    if (!userId && process.env.NODE_ENV === 'development' && process.env.DEV_MODE_BYPASS === 'true') {
-      const devUser = await prisma.user.findFirst({
-        include: { organization: true },
-      });
-      if (devUser) {
-        console.warn('⚠️ Authentication bypassed in DEV mode. Using first found user.');
-        return devUser as User;
+    // SECURE: Only bypass if explicitly enabled AND in development
+    const devBypassEnabled = process.env.DEV_MODE_BYPASS === 'true' && 
+                             process.env.NODE_ENV === 'development';
+
+    if (!userId) {
+      // Only attempt dev bypass if explicitly enabled
+      if (devBypassEnabled) {
+        console.warn('⚠️ DEV_MODE_BYPASS is enabled - bypassing authentication');
+        
+        const devUser = await prisma.user.findFirst({
+          include: { organization: true },
+        });
+
+        if (devUser) {
+          console.warn('⚠️ Using dev user:', devUser.email);
+          return devUser as User;
+        } else {
+          console.error('DEV_MODE_BYPASS enabled but no users found in database');
+        }
       }
+      
+      // No userId and no dev bypass = not authenticated
+      console.log('No user ID found in auth context');
+      return null;
     }
 
-    if (!userId) return null;
-
+    // Normal authenticated flow
     let user = (await prisma.user.findUnique({
       where: { clerkId: userId },
       include: { organization: true },
     })) as User | null;
 
     if (!user) {
-      const client = await clerkClient();
-      const clerkUser = await client.users.getUser(userId);
+      try {
+        const client = await clerkClient();
+        const clerkUser = await client.users.getUser(userId);
 
-      const firstName = clerkUser.firstName ?? undefined;
-      const lastName = clerkUser.lastName ?? undefined;
-      const email =
-        clerkUser.emailAddresses?.[0]?.emailAddress ??
-        clerkUser.primaryEmailAddress?.emailAddress;
+        const firstName = clerkUser.firstName ?? undefined;
+        const lastName = clerkUser.lastName ?? undefined;
+        const email =
+          clerkUser.emailAddresses?.[0]?.emailAddress ??
+          clerkUser.primaryEmailAddress?.emailAddress;
 
-      if (!email) throw new Error('No email found');
+        if (!email) {
+          console.error('No email found for Clerk user:', userId);
+          throw new Error('No email found');
+        }
 
-      let organization = await prisma.organization.findFirst();
-      if (!organization) {
-        organization = await prisma.organization.create({
-          data: { name: 'Default Organization' },
-        });
+        let organization = await prisma.organization.findFirst();
+        if (!organization) {
+          organization = await prisma.organization.create({
+            data: { name: 'Default Organization' },
+          });
+        }
+
+        user = (await prisma.user.create({
+          data: {
+            clerkId: userId,
+            email,
+            firstName,
+            lastName,
+            organizationId: organization.id,
+          },
+          include: { organization: true },
+        })) as User;
+      } catch (clerkError) {
+        console.error('Error fetching/creating user from Clerk:', clerkError);
+        return null;
       }
-
-      user = (await prisma.user.create({
-        data: {
-          clerkId: userId,
-          email,
-          firstName,
-          lastName,
-          organizationId: organization.id,
-        },
-        include: { organization: true },
-      })) as User;
     }
 
     return user;
@@ -64,6 +86,9 @@ export async function getCurrentUser(): Promise<User | null> {
 
 export async function requireAuth(): Promise<User> {
   const user = await getCurrentUser();
-  if (!user) throw new Error('Authentication required');
+  if (!user) {
+    console.error('Authentication required but no user found');
+    throw new Error('Authentication required');
+  }
   return user;
 }

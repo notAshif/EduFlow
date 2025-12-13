@@ -42,14 +42,28 @@ class RealtimeBroadcaster {
 
 export const broadcaster = new RealtimeBroadcaster();
 
+export type NotificationEventData = {
+    title: string;
+    message: string;
+    type: 'info' | 'success' | 'warning' | 'error';
+    category: 'workflow' | 'attendance' | 'assignment' | 'schedule' | 'system';
+};
+
 export type DashboardEvent =
     | { type: 'stats-update'; data: any }
     | { type: 'new-run'; data: any }
     | { type: 'run-complete'; data: any }
     | { type: 'workflow-created'; data: any }
     | { type: 'workflow-updated'; data: any }
-    | { type: 'workflow-deleted'; data: any };
+    | { type: 'workflow-deleted'; data: any }
+    | { type: 'notification'; data: NotificationEventData }
+    | { type: 'node-status'; data: { runId: string; nodeId: string; status: 'running' | 'success' | 'error'; error?: string } }
+    | { type: 'integration-missing'; data: { workflowId: string; workflowName: string; missing: string[] } };
 
 export function emitDashboardEvent(event: DashboardEvent) {
     broadcaster.broadcast('dashboard', event);
+}
+
+export function emitNotification(notification: NotificationEventData) {
+    broadcaster.broadcast('dashboard', { type: 'notification', data: notification });
 }

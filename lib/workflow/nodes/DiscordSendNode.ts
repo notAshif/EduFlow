@@ -4,19 +4,44 @@ import { NodeExecutionContext } from '@/lib/types';
 
 export class DiscordSendNode extends BaseNode {
   validate(config: any): void {
-    if (!config.webhookUrl) throw new Error('Discord webhook URL is required');
+    // Webhook URL can come from config OR from integration credentials
+    // So we don't require it in validation if it might come from credentials
     if (!config.message) throw new Error('Message is required');
-    if (!config.webhookUrl.startsWith('https://discord.com/api/webhooks/')) {
+
+    // Only validate webhook URL format if provided in config
+    if (config.webhookUrl && !config.webhookUrl.startsWith('https://discord.com/api/webhooks/')) {
       throw new Error('Invalid Discord webhook URL format');
     }
   }
 
   async execute(context: NodeExecutionContext): Promise<any> {
-    const { webhookUrl, message, username = 'FlowX Bot', avatar_url } = this.config;
+    const { message, username = 'EduFlow Bot', avatar_url } = this.config;
     const startTime = Date.now();
 
     console.log('[DISCORD] Starting execution');
-    console.log('[DISCORD] Webhook:', webhookUrl.substring(0, 50) + '...');
+
+    // Priority: config > credentials from integration
+    let webhookUrl = this.config.webhookUrl;
+
+    // If no webhook URL in config, try to get from integration credentials
+    if (!webhookUrl && context.services?.credentials) {
+      webhookUrl = context.services.credentials.webhookUrl;
+      console.log('[DISCORD] Using webhook URL from integration credentials');
+    }
+
+    // Fallback to environment variable
+    if (!webhookUrl) {
+      webhookUrl = process.env.DISCORD_WEBHOOK_URL;
+      if (webhookUrl) {
+        console.log('[DISCORD] Using webhook URL from environment variable');
+      }
+    }
+
+    if (!webhookUrl) {
+      throw new Error('Discord webhook URL is required. Configure it in the node settings, integration page, or set DISCORD_WEBHOOK_URL environment variable.');
+    }
+
+    console.log('[DISCORD] Webhook: ...', webhookUrl.substring(webhookUrl.length - 20));
     console.log('[DISCORD] Message:', message);
     console.log('[DISCORD] Username:', username);
 
@@ -42,11 +67,11 @@ export class DiscordSendNode extends BaseNode {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('[DISCORD] ✗ Failed:', errorText);
-        
+
         let errorData;
         try {
           errorData = JSON.parse(errorText);
-        } catch (e) {
+        } catch {
           throw new Error(`Discord API error: ${response.status} ${response.statusText}`);
         }
 

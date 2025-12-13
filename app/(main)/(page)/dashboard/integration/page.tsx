@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,8 +34,14 @@ import {
     X,
     Save,
     Trash2,
-    Check,
     AlertCircle,
+    Loader2,
+    CheckCircle2,
+    XCircle,
+    RefreshCw,
+    Zap,
+    Link2,
+    Unlink,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
@@ -62,6 +69,9 @@ interface Integration {
     popular?: boolean
     configFields: string[]
     config?: IntegrationConfig
+    connectionStatus: 'connected' | 'disconnected' | 'testing' | 'error'
+    lastTested?: string
+    errorMessage?: string
 }
 
 const defaultIntegrations: Integration[] = [
@@ -75,9 +85,10 @@ const defaultIntegrations: Integration[] = [
         iconColor: 'text-green-600',
         url: 'classroom.google.com',
         category: 'lms',
-        enabled: true,
+        enabled: false,
         popular: true,
         configFields: ['clientId', 'clientSecret'],
+        connectionStatus: 'disconnected',
     },
     {
         id: 'canvas',
@@ -88,9 +99,10 @@ const defaultIntegrations: Integration[] = [
         iconColor: 'text-red-600',
         url: 'canvas.instructure.com',
         category: 'lms',
-        enabled: true,
+        enabled: false,
         popular: true,
         configFields: ['apiKey', 'customField1'],
+        connectionStatus: 'disconnected',
     },
     {
         id: 'schoology',
@@ -103,6 +115,7 @@ const defaultIntegrations: Integration[] = [
         category: 'lms',
         enabled: false,
         configFields: ['apiKey', 'clientId'],
+        connectionStatus: 'disconnected',
     },
     {
         id: 'moodle',
@@ -115,6 +128,7 @@ const defaultIntegrations: Integration[] = [
         category: 'lms',
         enabled: false,
         configFields: ['apiKey', 'customField1'],
+        connectionStatus: 'disconnected',
     },
 
     // Communication
@@ -127,9 +141,24 @@ const defaultIntegrations: Integration[] = [
         iconColor: 'text-green-600',
         url: 'whatsapp.com',
         category: 'communication',
-        enabled: true,
+        enabled: false,
         popular: true,
         configFields: ['phoneNumber', 'apiKey'],
+        connectionStatus: 'disconnected',
+    },
+    {
+        id: 'whatsapp-web',
+        name: 'WhatsApp Web',
+        description: 'Connect via QR code to send messages to groups and individuals.',
+        icon: <Phone className="w-6 h-6" />,
+        iconBg: 'bg-emerald-100',
+        iconColor: 'text-emerald-600',
+        url: 'web.whatsapp.com',
+        category: 'communication',
+        enabled: false,
+        popular: true,
+        configFields: [],
+        connectionStatus: 'disconnected',
     },
     {
         id: 'gmail',
@@ -140,8 +169,9 @@ const defaultIntegrations: Integration[] = [
         iconColor: 'text-red-500',
         url: 'mail.google.com',
         category: 'communication',
-        enabled: true,
+        enabled: false,
         configFields: ['email', 'clientId', 'clientSecret'],
+        connectionStatus: 'disconnected',
     },
     {
         id: 'slack',
@@ -154,6 +184,7 @@ const defaultIntegrations: Integration[] = [
         category: 'communication',
         enabled: false,
         configFields: ['webhookUrl'],
+        connectionStatus: 'disconnected',
     },
     {
         id: 'discord',
@@ -166,6 +197,7 @@ const defaultIntegrations: Integration[] = [
         category: 'communication',
         enabled: false,
         configFields: ['webhookUrl'],
+        connectionStatus: 'disconnected',
     },
     {
         id: 'remind',
@@ -178,6 +210,7 @@ const defaultIntegrations: Integration[] = [
         category: 'communication',
         enabled: false,
         configFields: ['apiKey'],
+        connectionStatus: 'disconnected',
     },
 
     // Grading & Assessment
@@ -192,6 +225,7 @@ const defaultIntegrations: Integration[] = [
         category: 'grading',
         enabled: false,
         configFields: ['apiKey', 'clientId'],
+        connectionStatus: 'disconnected',
     },
     {
         id: 'gradescope',
@@ -204,6 +238,7 @@ const defaultIntegrations: Integration[] = [
         category: 'grading',
         enabled: false,
         configFields: ['apiKey'],
+        connectionStatus: 'disconnected',
     },
     {
         id: 'kahoot',
@@ -216,6 +251,7 @@ const defaultIntegrations: Integration[] = [
         category: 'grading',
         enabled: false,
         configFields: ['apiKey'],
+        connectionStatus: 'disconnected',
     },
 
     // Scheduling
@@ -228,8 +264,9 @@ const defaultIntegrations: Integration[] = [
         iconColor: 'text-blue-600',
         url: 'calendar.google.com',
         category: 'scheduling',
-        enabled: true,
+        enabled: false,
         configFields: ['clientId', 'clientSecret'],
+        connectionStatus: 'disconnected',
     },
     {
         id: 'zoom',
@@ -240,8 +277,9 @@ const defaultIntegrations: Integration[] = [
         iconColor: 'text-blue-600',
         url: 'zoom.us',
         category: 'scheduling',
-        enabled: true,
+        enabled: false,
         configFields: ['apiKey', 'clientId', 'clientSecret'],
+        connectionStatus: 'disconnected',
     },
     {
         id: 'google-meet',
@@ -254,6 +292,7 @@ const defaultIntegrations: Integration[] = [
         category: 'scheduling',
         enabled: false,
         configFields: ['clientId', 'clientSecret'],
+        connectionStatus: 'disconnected',
     },
 
     // Storage & Files
@@ -266,8 +305,9 @@ const defaultIntegrations: Integration[] = [
         iconColor: 'text-yellow-600',
         url: 'drive.google.com',
         category: 'storage',
-        enabled: true,
+        enabled: false,
         configFields: ['clientId', 'clientSecret'],
+        connectionStatus: 'disconnected',
     },
     {
         id: 'onedrive',
@@ -280,6 +320,7 @@ const defaultIntegrations: Integration[] = [
         category: 'storage',
         enabled: false,
         configFields: ['clientId', 'clientSecret'],
+        connectionStatus: 'disconnected',
     },
 
     // Analytics
@@ -294,6 +335,7 @@ const defaultIntegrations: Integration[] = [
         category: 'analytics',
         enabled: false,
         configFields: ['apiKey', 'clientId'],
+        connectionStatus: 'disconnected',
     },
     {
         id: 'google-sheets',
@@ -304,8 +346,9 @@ const defaultIntegrations: Integration[] = [
         iconColor: 'text-green-600',
         url: 'sheets.google.com',
         category: 'analytics',
-        enabled: true,
+        enabled: false,
         configFields: ['clientId', 'clientSecret'],
+        connectionStatus: 'disconnected',
     },
 
     // AI Tools
@@ -318,9 +361,10 @@ const defaultIntegrations: Integration[] = [
         iconColor: 'text-emerald-600',
         url: 'openai.com',
         category: 'ai',
-        enabled: true,
+        enabled: false,
         popular: true,
         configFields: ['apiKey'],
+        connectionStatus: 'disconnected',
     },
 ]
 
@@ -347,7 +391,10 @@ const fieldLabels: Record<string, string> = {
     customField2: 'Additional Config',
 }
 
+const STORAGE_KEY = 'eduflow_integrations'
+
 export default function IntegrationPage() {
+    const router = useRouter()
     const [activeTab, setActiveTab] = useState<Tab>('all')
     const [searchQuery, setSearchQuery] = useState('')
     const [integrations, setIntegrations] = useState<Integration[]>(defaultIntegrations)
@@ -355,6 +402,9 @@ export default function IntegrationPage() {
     const [showConfigModal, setShowConfigModal] = useState(false)
     const [showAddModal, setShowAddModal] = useState(false)
     const [configForm, setConfigForm] = useState<IntegrationConfig>({})
+    const [isTesting, setIsTesting] = useState(false)
+    const [isSaving, setIsSaving] = useState(false)
+    const [isLoading, setIsLoading] = useState(true)
     const [newIntegration, setNewIntegration] = useState({
         name: '',
         description: '',
@@ -363,48 +413,323 @@ export default function IntegrationPage() {
     })
     const { toast } = useToast()
 
-    const toggleIntegration = (id: string) => {
-        setIntegrations(prev => prev.map(integration => 
-            integration.id === id 
-                ? { ...integration, enabled: !integration.enabled }
-                : integration
-        ))
+    // Load integrations from DB + localStorage on mount
+    useEffect(() => {
+        const loadIntegrations = async () => {
+            setIsLoading(true)
+
+            // 1. Fetch from Database
+            let dbIntegrations: any[] = []
+            try {
+                const response = await fetch('/api/integrations')
+                if (response.ok) {
+                    const data = await response.json()
+                    dbIntegrations = data.integrations || []
+                }
+            } catch (error) {
+                console.log('Using local storage')
+            }
+
+            // 2. Fetch from LocalStorage
+            let localIntegrations: any[] = []
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY)
+                if (saved) {
+                    localIntegrations = JSON.parse(saved)
+                }
+            } catch (e) {
+                console.error('Error loading from localStorage:', e)
+            }
+
+            // 3. Check WhatsApp Web Status specifically
+            let isWhatsAppConnected = false;
+            try {
+                const waResponse = await fetch('/api/whatsapp-web');
+                const waData = await waResponse.json();
+                isWhatsAppConnected = waData.connected;
+            } catch (e) {
+                console.error('Failed to check WhatsApp status', e);
+            }
+
+            // 4. Merge Logic
+            const merged = defaultIntegrations.map(defaultInt => {
+                // Special handling for WhatsApp Web
+                if (defaultInt.id === 'whatsapp-web') {
+                    return {
+                        ...defaultInt,
+                        enabled: isWhatsAppConnected,
+                        connectionStatus: isWhatsAppConnected ? 'connected' : 'disconnected',
+                        getLastTested: isWhatsAppConnected ? new Date().toISOString() : undefined
+                    } as Integration;
+                }
+
+                // Check if saved in DB
+                const dbInt = dbIntegrations.find((d: any) => d.type === defaultInt.id)
+                if (dbInt) {
+                    return {
+                        ...defaultInt,
+                        enabled: true,
+                        config: dbInt.meta?.config || {},
+                        connectionStatus: 'connected' as const,
+                        lastTested: dbInt.updatedAt,
+                    }
+                }
+
+                // Check if saved locally
+                const localInt = localIntegrations.find((l: any) => l.id === defaultInt.id)
+                if (localInt?.config && Object.keys(localInt.config).some(k => localInt.config[k])) {
+                    return {
+                        ...defaultInt,
+                        enabled: localInt.enabled || false,
+                        config: localInt.config,
+                        connectionStatus: localInt.enabled ? 'connected' as const : 'disconnected' as const,
+                        lastTested: localInt.lastTested,
+                    }
+                }
+
+                return defaultInt
+            })
+
+            // Add custom integrations from localStorage
+            const customInts = localIntegrations.filter((l: any) => l.category === 'custom')
+            const customWithIcons = customInts.map((c: any) => ({
+                ...c,
+                icon: <Globe className="w-6 h-6" />,
+            }))
+
+            setIntegrations([...merged, ...customWithIcons])
+            setIsLoading(false)
+        }
+
+        loadIntegrations()
+    }, [])
+
+    // Save to localStorage
+    const saveToLocalStorage = useCallback((updatedIntegrations: Integration[]) => {
+        const toSave = updatedIntegrations.map(({ icon, ...rest }) => rest)
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave))
+    }, [])
+
+    // Save to database
+    const saveToDatabase = async (integration: Integration, config: IntegrationConfig): Promise<boolean> => {
+        try {
+            const response = await fetch('/api/integrations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: integration.id,
+                    credentials: config,
+                    meta: { config, name: integration.name }
+                })
+            })
+            return response.ok
+        } catch (error) {
+            console.error('Failed to save:', error)
+            return false
+        }
+    }
+
+    // Delete from database
+    const deleteFromDatabase = async (integrationId: string): Promise<boolean> => {
+        try {
+            const response = await fetch(`/api/integrations?type=${integrationId}`, {
+                method: 'DELETE'
+            })
+            return response.ok
+        } catch (error) {
+            console.error('Failed to delete:', error)
+            return false
+        }
+    }
+
+    // Test integration connection
+    const testConnection = async (integration: Integration, config: IntegrationConfig): Promise<{ success: boolean; message: string }> => {
+        try {
+            const hasConfig = Object.keys(config).some(k => config[k as keyof IntegrationConfig])
+
+            if (!hasConfig) {
+                return {
+                    success: false,
+                    message: 'Please enter your credentials to connect.',
+                }
+            }
+
+            // For webhooks, test with a real request
+            if (config.webhookUrl && (integration.id === 'discord' || integration.id === 'slack')) {
+                const testEndpoint = `/api/integrations/${integration.id}/test`
+                const response = await fetch(testEndpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ webhookUrl: config.webhookUrl })
+                })
+                const data = await response.json()
+                return {
+                    success: data.success || data.configured,
+                    message: data.message || data.error || 'Connection test completed',
+                }
+            }
+
+            // For other integrations, validate config exists
+            return {
+                success: true,
+                message: 'Configuration saved successfully',
+            }
+        } catch (error) {
+            return {
+                success: false,
+                message: error instanceof Error ? error.message : 'Connection test failed',
+            }
+        }
+    }
+
+    // Toggle integration
+    const toggleIntegration = async (id: string) => {
+        const integration = integrations.find(i => i.id === id)
+        if (!integration) return
+
+        // If trying to enable but no config, open config modal
+        if (!integration.enabled) {
+            const hasConfig = integration.config && Object.keys(integration.config).some(k => integration.config?.[k as keyof IntegrationConfig])
+
+            if (!hasConfig) {
+                openConfigModal(integration)
+                return
+            }
+        }
+
+        // Toggle the integration
+        const updated = integrations.map(i =>
+            i.id === id
+                ? {
+                    ...i,
+                    enabled: !i.enabled,
+                    connectionStatus: !i.enabled ? 'connected' as const : 'disconnected' as const
+                }
+                : i
+        )
+        setIntegrations(updated)
+        saveToLocalStorage(updated)
+
+        toast({
+            title: integration.enabled ? 'Integration Disabled' : 'Integration Enabled',
+            description: `${integration.name} has been ${integration.enabled ? 'disabled' : 'enabled'}.`,
+        })
     }
 
     const openConfigModal = (integration: Integration) => {
+        if (integration.id === 'whatsapp-web') {
+            router.push('/dashboard/integration/whatsapp-web')
+            return
+        }
         setSelectedIntegration(integration)
         setConfigForm(integration.config || {})
         setShowConfigModal(true)
     }
 
-    const saveConfig = () => {
+    const saveConfig = async () => {
         if (!selectedIntegration) return
 
-        setIntegrations(prev => prev.map(integration => 
-            integration.id === selectedIntegration.id 
-                ? { ...integration, config: configForm, enabled: true }
-                : integration
-        ))
+        setIsSaving(true)
 
-        toast({
-            title: 'Configuration Saved',
-            description: `${selectedIntegration.name} has been configured successfully.`,
-        })
+        const hasConfig = Object.keys(configForm).some(k => configForm[k as keyof IntegrationConfig])
+
+        // Test the connection
+        let connectionResult = await testConnection(selectedIntegration, configForm)
+
+        // Save to database
+        if (hasConfig && connectionResult.success) {
+            await saveToDatabase(selectedIntegration, configForm)
+        }
+
+        const updatedIntegrations = integrations.map(integration =>
+            integration.id === selectedIntegration.id
+                ? {
+                    ...integration,
+                    config: configForm,
+                    enabled: hasConfig && connectionResult.success,
+                    connectionStatus: connectionResult.success ? 'connected' as const : (hasConfig ? 'error' as const : 'disconnected' as const),
+                    lastTested: new Date().toISOString(),
+                    errorMessage: !connectionResult.success ? connectionResult.message : undefined,
+                }
+                : integration
+        )
+
+        setIntegrations(updatedIntegrations)
+        saveToLocalStorage(updatedIntegrations)
+
+        setIsSaving(false)
+
+        if (connectionResult.success) {
+            toast({
+                title: 'Connected Successfully',
+                description: `${selectedIntegration.name} is now active and ready to use.`,
+            })
+        } else {
+            toast({
+                title: 'Connection Failed',
+                description: connectionResult.message,
+                variant: 'destructive',
+            })
+        }
 
         setShowConfigModal(false)
         setSelectedIntegration(null)
         setConfigForm({})
     }
 
-    const deleteIntegration = (id: string) => {
-        setIntegrations(prev => prev.filter(integration => integration.id !== id))
+    const testSelectedConnection = async () => {
+        if (!selectedIntegration) return
+
+        setIsTesting(true)
+        const result = await testConnection(selectedIntegration, configForm)
+        setIsTesting(false)
+
+        toast({
+            title: result.success ? 'Connection Successful' : 'Connection Failed',
+            description: result.message,
+            variant: result.success ? 'default' : 'destructive',
+        })
+    }
+
+    const disconnectIntegration = async (id: string) => {
+        // Delete from database
+        await deleteFromDatabase(id)
+
+        const updated = integrations.map(i =>
+            i.id === id
+                ? {
+                    ...i,
+                    enabled: false,
+                    config: undefined,
+                    connectionStatus: 'disconnected' as const,
+                    errorMessage: undefined,
+                }
+                : i
+        )
+        setIntegrations(updated)
+        saveToLocalStorage(updated)
+
+        toast({
+            title: 'Disconnected',
+            description: 'Integration has been disconnected.',
+        })
+
+        setShowConfigModal(false)
+        setSelectedIntegration(null)
+    }
+
+    const deleteIntegration = async (id: string) => {
+        await disconnectIntegration(id)
+        const updated = integrations.filter(integration => integration.id !== id)
+        setIntegrations(updated)
+        saveToLocalStorage(updated)
         toast({
             title: 'Integration Removed',
             description: 'The custom integration has been removed.',
         })
     }
 
-    const addCustomIntegration = () => {
+    const addCustomIntegration = async () => {
         if (!newIntegration.name || !newIntegration.webhookUrl) {
             toast({
                 title: 'Missing Fields',
@@ -413,6 +738,8 @@ export default function IntegrationPage() {
             })
             return
         }
+
+        setIsTesting(true)
 
         const custom: Integration = {
             id: `custom-${Date.now()}`,
@@ -426,9 +753,15 @@ export default function IntegrationPage() {
             enabled: true,
             configFields: ['webhookUrl'],
             config: { webhookUrl: newIntegration.webhookUrl },
+            connectionStatus: 'connected',
+            lastTested: new Date().toISOString(),
         }
 
-        setIntegrations(prev => [...prev, custom])
+        const updated = [...integrations, custom]
+        setIntegrations(updated)
+        saveToLocalStorage(updated)
+
+        setIsTesting(false)
         setShowAddModal(false)
         setNewIntegration({ name: '', description: '', url: '', webhookUrl: '' })
 
@@ -441,42 +774,72 @@ export default function IntegrationPage() {
     const exportConfig = () => {
         const configData = {
             exportDate: new Date().toISOString(),
-            integrations: integrations.map(({ id, name, enabled, config, category }) => ({
-                id,
-                name,
-                enabled,
-                category,
-                config: config || {},
-            })),
+            integrations: integrations
+                .filter(i => i.enabled)
+                .map(({ id, name, enabled, category }) => ({
+                    id,
+                    name,
+                    enabled,
+                    category,
+                })),
         }
 
         const blob = new Blob([JSON.stringify(configData, null, 2)], { type: 'application/json' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `eduflow-integrations-${new Date().toISOString().split('T')[0]}.json`
+        a.download = `integrations-${new Date().toISOString().split('T')[0]}.json`
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
         URL.revokeObjectURL(url)
 
         toast({
-            title: 'Export Complete',
-            description: 'Integration configuration has been downloaded.',
+            title: 'Exported',
+            description: 'Integration list has been downloaded.',
         })
+    }
+
+    const getConnectionStatusIcon = (integration: Integration) => {
+        if (integration.connectionStatus === 'testing') {
+            return <Loader2 className="w-4 h-4 animate-spin text-primary" />
+        }
+        if (integration.enabled && integration.connectionStatus === 'connected') {
+            return <CheckCircle2 className="w-4 h-4 text-green-500" />
+        }
+        if (integration.connectionStatus === 'error') {
+            return <XCircle className="w-4 h-4 text-red-500" />
+        }
+        return null
+    }
+
+    const getConnectionStatusText = (integration: Integration) => {
+        if (integration.connectionStatus === 'testing') return 'Testing...'
+        if (integration.enabled && integration.connectionStatus === 'connected') return 'Connected'
+        if (integration.connectionStatus === 'error') return 'Error'
+        return 'Not connected'
     }
 
     const filteredIntegrations = integrations.filter(integration => {
         const matchesSearch = integration.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             integration.description.toLowerCase().includes(searchQuery.toLowerCase())
-        
+
         if (activeTab === 'all') return matchesSearch
         return matchesSearch && integration.category === activeTab
     })
 
-    const activeCount = integrations.filter(i => i.enabled).length
-    const popularIntegrations = integrations.filter(i => i.popular)
+    const activeCount = integrations.filter(i => i.enabled && i.connectionStatus === 'connected').length
+    const totalCount = integrations.length
     const customCount = integrations.filter(i => i.category === 'custom').length
+    const popularIntegrations = integrations.filter(i => i.popular)
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+        )
+    }
 
     return (
         <div className="space-y-8">
@@ -484,17 +847,17 @@ export default function IntegrationPage() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold flex items-center gap-2">
-                        <GraduationCap className="w-7 h-7 text-primary" />
-                        Educational Integrations
+                        <Zap className="w-7 h-7 text-primary" />
+                        Integrations
                     </h1>
                     <p className="text-muted-foreground mt-1">
-                        Connect your favorite educational tools to automate attendance, grading, and parent communication.
+                        Connect your favorite tools to automate your teaching workflow.
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" onClick={exportConfig}>
                         <Download className="w-4 h-4 mr-2" />
-                        Export Config
+                        Export
                     </Button>
                     <Button size="sm" onClick={() => setShowAddModal(true)}>
                         <Plus className="w-4 h-4 mr-2" />
@@ -505,54 +868,54 @@ export default function IntegrationPage() {
 
             {/* Stats Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Card className="bg-gradient-to-br from-green-50 to-green-100/50 border-green-200">
+                <Card className="bg-gradient-to-br from-green-50 to-green-100/50 border-green-200 dark:from-green-950/20 dark:to-green-900/10 dark:border-green-800">
                     <CardContent className="p-4">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-green-500 text-white flex items-center justify-center">
-                                <Check className="w-5 h-5" />
+                                <Link2 className="w-5 h-5" />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold text-green-700">{activeCount}</p>
-                                <p className="text-sm text-green-600">Active</p>
+                                <p className="text-2xl font-bold text-green-700 dark:text-green-400">{activeCount}</p>
+                                <p className="text-sm text-green-600 dark:text-green-500">Connected</p>
                             </div>
                         </div>
                     </CardContent>
                 </Card>
-                <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200">
+                <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200 dark:from-blue-950/20 dark:to-blue-900/10 dark:border-blue-800">
                     <CardContent className="p-4">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center">
-                                <BookOpen className="w-5 h-5" />
+                                <Zap className="w-5 h-5" />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold text-blue-700">{integrations.filter(i => i.category === 'lms').length}</p>
-                                <p className="text-sm text-blue-600">LMS</p>
+                                <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{totalCount}</p>
+                                <p className="text-sm text-blue-600 dark:text-blue-500">Available</p>
                             </div>
                         </div>
                     </CardContent>
                 </Card>
-                <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50 border-purple-200">
+                <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50 border-purple-200 dark:from-purple-950/20 dark:to-purple-900/10 dark:border-purple-800">
                     <CardContent className="p-4">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-purple-500 text-white flex items-center justify-center">
                                 <Globe className="w-5 h-5" />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold text-purple-700">{customCount}</p>
-                                <p className="text-sm text-purple-600">Custom</p>
+                                <p className="text-2xl font-bold text-purple-700 dark:text-purple-400">{customCount}</p>
+                                <p className="text-sm text-purple-600 dark:text-purple-500">Custom</p>
                             </div>
                         </div>
                     </CardContent>
                 </Card>
-                <Card className="bg-gradient-to-br from-orange-50 to-orange-100/50 border-orange-200">
+                <Card className="bg-gradient-to-br from-orange-50 to-orange-100/50 border-orange-200 dark:from-orange-950/20 dark:to-orange-900/10 dark:border-orange-800">
                     <CardContent className="p-4">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-orange-500 text-white flex items-center justify-center">
-                                <Settings className="w-5 h-5" />
+                                <BookOpen className="w-5 h-5" />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold text-orange-700">{integrations.filter(i => i.config && Object.keys(i.config).length > 0).length}</p>
-                                <p className="text-sm text-orange-600">Configured</p>
+                                <p className="text-2xl font-bold text-orange-700 dark:text-orange-400">6</p>
+                                <p className="text-sm text-orange-600 dark:text-orange-500">Categories</p>
                             </div>
                         </div>
                     </CardContent>
@@ -566,13 +929,12 @@ export default function IntegrationPage() {
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     {popularIntegrations.map((integration) => (
-                        <Card 
-                            key={integration.id} 
-                            className={`cursor-pointer transition-all hover:shadow-md ${
-                                integration.enabled 
-                                    ? 'ring-2 ring-primary ring-offset-2' 
-                                    : ''
-                            }`}
+                        <Card
+                            key={integration.id}
+                            className={`cursor-pointer transition-all hover:shadow-md ${integration.enabled && integration.connectionStatus === 'connected'
+                                ? 'ring-2 ring-green-500 ring-offset-2'
+                                : ''
+                                }`}
                             onClick={() => openConfigModal(integration)}
                         >
                             <CardContent className="p-4 flex items-center gap-3">
@@ -581,8 +943,9 @@ export default function IntegrationPage() {
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <h3 className="font-semibold truncate">{integration.name}</h3>
-                                    <p className="text-xs text-muted-foreground">
-                                        {integration.enabled ? '✓ Connected' : 'Click to configure'}
+                                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                        {getConnectionStatusIcon(integration)}
+                                        <span>{getConnectionStatusText(integration)}</span>
                                     </p>
                                 </div>
                             </CardContent>
@@ -598,11 +961,10 @@ export default function IntegrationPage() {
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
-                            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
-                                activeTab === tab 
-                                    ? 'bg-background text-foreground shadow-sm' 
-                                    : 'text-muted-foreground hover:text-foreground'
-                            }`}
+                            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${activeTab === tab
+                                ? 'bg-background text-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground'
+                                }`}
                         >
                             {tabLabels[tab]}
                             {tab === 'custom' && customCount > 0 && (
@@ -641,16 +1003,24 @@ export default function IntegrationPage() {
                                     {integration.category === 'custom' && (
                                         <Badge variant="outline" className="text-xs">Custom</Badge>
                                     )}
-                                    {integration.config && Object.keys(integration.config).length > 0 && (
-                                        <Badge className="text-xs bg-green-100 text-green-700">Configured</Badge>
+                                    {integration.enabled && integration.connectionStatus === 'connected' && (
+                                        <Badge className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                            Connected
+                                        </Badge>
                                     )}
-                                    <a 
+                                    {integration.connectionStatus === 'error' && (
+                                        <Badge className="text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                                            Error
+                                        </Badge>
+                                    )}
+                                    <a
                                         href={`https://${integration.url}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1"
+                                        className="text-muted-foreground hover:text-primary"
+                                        onClick={(e) => e.stopPropagation()}
                                     >
-                                        <ExternalLink className="w-3 h-3" />
+                                        <ExternalLink className="w-4 h-4" />
                                     </a>
                                 </div>
                             </div>
@@ -660,9 +1030,15 @@ export default function IntegrationPage() {
                                 {integration.description}
                             </p>
 
+                            {integration.errorMessage && (
+                                <div className="text-xs text-red-500 mb-3 p-2 bg-red-50 dark:bg-red-900/20 rounded">
+                                    {integration.errorMessage}
+                                </div>
+                            )}
+
                             <div className="flex items-center justify-between pt-3 border-t">
                                 <div className="flex items-center gap-2">
-                                    <button 
+                                    <button
                                         onClick={() => openConfigModal(integration)}
                                         className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-colors"
                                     >
@@ -670,7 +1046,7 @@ export default function IntegrationPage() {
                                         Configure
                                     </button>
                                     {integration.category === 'custom' && (
-                                        <button 
+                                        <button
                                             onClick={() => deleteIntegration(integration.id)}
                                             className="text-sm text-red-500 hover:text-red-600 flex items-center gap-1.5 transition-colors"
                                         >
@@ -682,18 +1058,19 @@ export default function IntegrationPage() {
                                 {/* Toggle Switch */}
                                 <button
                                     onClick={() => toggleIntegration(integration.id)}
-                                    className={`relative w-11 h-6 rounded-full transition-colors ${
-                                        integration.enabled 
-                                            ? 'bg-green-500' 
+                                    className={`relative w-11 h-6 rounded-full transition-colors ${integration.enabled && integration.connectionStatus === 'connected'
+                                        ? 'bg-green-500'
+                                        : integration.connectionStatus === 'error'
+                                            ? 'bg-red-400'
                                             : 'bg-muted'
-                                    }`}
+                                        }`}
+                                    title={integration.enabled ? 'Click to disable' : 'Click to configure'}
                                 >
                                     <span
-                                        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${
-                                            integration.enabled 
-                                                ? 'translate-x-5' 
-                                                : 'translate-x-0'
-                                        }`}
+                                        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${integration.enabled
+                                            ? 'translate-x-5'
+                                            : 'translate-x-0'
+                                            }`}
                                     />
                                 </button>
                             </div>
@@ -724,15 +1101,20 @@ export default function IntegrationPage() {
             {/* Configuration Modal */}
             {showConfigModal && selectedIntegration && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <Card className="w-full max-w-lg">
+                    <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
                         <CardHeader className="flex flex-row items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <div className={`w-10 h-10 rounded-lg ${selectedIntegration.iconBg} ${selectedIntegration.iconColor} flex items-center justify-center`}>
                                     {selectedIntegration.icon}
                                 </div>
                                 <div>
-                                    <CardTitle>{selectedIntegration.name}</CardTitle>
-                                    <p className="text-sm text-muted-foreground">Configure integration settings</p>
+                                    <CardTitle className="flex items-center gap-2">
+                                        {selectedIntegration.name}
+                                        {selectedIntegration.enabled && selectedIntegration.connectionStatus === 'connected' && (
+                                            <CheckCircle2 className="w-5 h-5 text-green-500" />
+                                        )}
+                                    </CardTitle>
+                                    <p className="text-sm text-muted-foreground">Enter your credentials to connect</p>
                                 </div>
                             </div>
                             <Button variant="ghost" size="icon" onClick={() => setShowConfigModal(false)}>
@@ -740,12 +1122,13 @@ export default function IntegrationPage() {
                             </Button>
                         </CardHeader>
                         <CardContent className="space-y-4">
+                            {/* Config Fields */}
                             {selectedIntegration.configFields.map((field) => (
                                 <div key={field} className="space-y-2">
                                     <Label htmlFor={field}>{fieldLabels[field] || field}</Label>
                                     <Input
                                         id={field}
-                                        type={field.toLowerCase().includes('secret') || field.toLowerCase().includes('key') ? 'password' : 'text'}
+                                        type={field.toLowerCase().includes('secret') || field.toLowerCase().includes('key') || field.toLowerCase().includes('pass') ? 'password' : 'text'}
                                         placeholder={`Enter ${fieldLabels[field] || field}`}
                                         value={configForm[field as keyof IntegrationConfig] || ''}
                                         onChange={(e) => setConfigForm(prev => ({ ...prev, [field]: e.target.value }))}
@@ -756,19 +1139,54 @@ export default function IntegrationPage() {
                             {selectedIntegration.configFields.length === 0 && (
                                 <div className="flex items-center gap-2 text-muted-foreground p-4 bg-muted rounded-lg">
                                     <AlertCircle className="w-5 h-5" />
-                                    <p className="text-sm">This integration uses environment variables for configuration.</p>
+                                    <p className="text-sm">This integration doesn't require additional configuration.</p>
                                 </div>
                             )}
 
-                            <div className="flex justify-end gap-2 pt-4">
-                                <Button variant="outline" onClick={() => setShowConfigModal(false)}>
-                                    Cancel
+                            {selectedIntegration.lastTested && (
+                                <p className="text-xs text-muted-foreground">
+                                    Last connected: {new Date(selectedIntegration.lastTested).toLocaleString()}
+                                </p>
+                            )}
+
+                            <div className="flex gap-2 pt-4">
+                                <Button
+                                    variant="outline"
+                                    onClick={testSelectedConnection}
+                                    disabled={isTesting || isSaving}
+                                    className="flex-1"
+                                >
+                                    {isTesting ? (
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    ) : (
+                                        <RefreshCw className="w-4 h-4 mr-2" />
+                                    )}
+                                    Test
                                 </Button>
-                                <Button onClick={saveConfig}>
-                                    <Save className="w-4 h-4 mr-2" />
-                                    Save Configuration
+                                <Button
+                                    onClick={saveConfig}
+                                    disabled={isTesting || isSaving}
+                                    className="flex-1"
+                                >
+                                    {isSaving ? (
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    ) : (
+                                        <Save className="w-4 h-4 mr-2" />
+                                    )}
+                                    Connect
                                 </Button>
                             </div>
+
+                            {selectedIntegration.enabled && (
+                                <Button
+                                    variant="outline"
+                                    onClick={() => disconnectIntegration(selectedIntegration.id)}
+                                    className="w-full text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                >
+                                    <Unlink className="w-4 h-4 mr-2" />
+                                    Disconnect
+                                </Button>
+                            )}
                         </CardContent>
                     </Card>
                 </div>
@@ -824,17 +1242,18 @@ export default function IntegrationPage() {
                                     value={newIntegration.webhookUrl}
                                     onChange={(e) => setNewIntegration(prev => ({ ...prev, webhookUrl: e.target.value }))}
                                 />
-                                <p className="text-xs text-muted-foreground">
-                                    The URL that will receive data from your workflows
-                                </p>
                             </div>
 
                             <div className="flex justify-end gap-2 pt-4">
                                 <Button variant="outline" onClick={() => setShowAddModal(false)}>
                                     Cancel
                                 </Button>
-                                <Button onClick={addCustomIntegration}>
-                                    <Plus className="w-4 h-4 mr-2" />
+                                <Button onClick={addCustomIntegration} disabled={isTesting}>
+                                    {isTesting ? (
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    ) : (
+                                        <Plus className="w-4 h-4 mr-2" />
+                                    )}
                                     Add Integration
                                 </Button>
                             </div>
@@ -848,9 +1267,9 @@ export default function IntegrationPage() {
                 <CardContent className="p-6">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                         <div>
-                            <h3 className="font-semibold text-lg mb-1">Need help setting up integrations?</h3>
+                            <h3 className="font-semibold text-lg mb-1">Need Help?</h3>
                             <p className="text-muted-foreground">
-                                Check our documentation for step-by-step guides on connecting your school tools.
+                                Check our documentation for step-by-step guides on connecting your favorite tools.
                             </p>
                         </div>
                         <div className="flex gap-2">

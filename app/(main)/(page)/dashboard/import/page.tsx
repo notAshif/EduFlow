@@ -5,6 +5,8 @@ import { useState, useCallback, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
     Upload,
@@ -20,10 +22,25 @@ import {
     RefreshCw,
     HelpCircle,
     ExternalLink,
+    Building2,
+    GraduationCap,
+    Save,
 } from 'lucide-react'
 import { useDropzone } from 'react-dropzone'
 import Papa from 'papaparse'
 import { useToast } from '@/hooks/use-toast'
+
+// Course/College Info interface
+interface CourseInfo {
+    university: string
+    department: string
+    course: string
+    term: string
+    semester: string
+    faculty: string
+    createdOn: string
+    creatorName: string
+}
 
 interface ImportResult {
     success: boolean
@@ -76,7 +93,19 @@ export default function ImportPage() {
     const [storedCounts, setStoredCounts] = useState<Record<string, number>>({})
     const { toast } = useToast()
 
-    // Load stored counts on mount
+    // Course/College Info state
+    const [courseInfo, setCourseInfo] = useState<CourseInfo>({
+        university: '',
+        department: '',
+        course: '',
+        term: '',
+        semester: '',
+        faculty: '',
+        createdOn: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        creatorName: ''
+    })
+
+    // Load stored counts and course info on mount
     useEffect(() => {
         const counts: Record<string, number> = {}
         const types = ['attendance', 'assignments', 'schedule', 'students']
@@ -85,7 +114,111 @@ export default function ImportPage() {
             counts[type] = data ? JSON.parse(data).length : 0
         })
         setStoredCounts(counts)
+
+        // Load course info from localStorage
+        const savedCourseInfo = localStorage.getItem('teachus_course_info')
+        if (savedCourseInfo) {
+            try {
+                setCourseInfo(JSON.parse(savedCourseInfo))
+            } catch (e) {
+                console.log('Error loading course info:', e)
+            }
+        }
     }, [importResults])
+
+    // Save course info to localStorage
+    const saveCourseInfo = () => {
+        localStorage.setItem('teachus_course_info', JSON.stringify(courseInfo))
+        // Broadcast update
+        window.dispatchEvent(new CustomEvent('teachusDataSync', {
+            detail: { type: 'course_info', data: courseInfo }
+        }))
+        toast({
+            title: "College Info Saved! ✅",
+            description: "Your college information has been saved and will appear in attendance reports.",
+        })
+    }
+
+    // Update course info field
+    const updateCourseInfo = (field: keyof CourseInfo, value: string) => {
+        setCourseInfo(prev => ({ ...prev, [field]: value }))
+    }
+
+    // Parse CSV and extract metadata from first rows (TeachUs format)
+    const parseCSVWithMetadata = (file: File): Promise<{ data: any[], metadata: CourseInfo }> => {
+        return new Promise((resolve, reject) => {
+            // First, read the raw file to extract metadata from first rows
+            const reader = new FileReader()
+            reader.onload = (e) => {
+                const text = e.target?.result as string
+                const lines = text.split(/\r?\n/)
+
+                // Extract metadata from first 6-10 rows that contain key-value pairs
+                const extractedInfo: Partial<CourseInfo> = {
+                    createdOn: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                }
+
+                // Look for metadata patterns in first 10 rows
+                for (let i = 0; i < Math.min(10, lines.length); i++) {
+                    const line = lines[i].toLowerCase()
+                    const cells = lines[i].split(',').map(c => c.trim().replace(/"/g, ''))
+
+                    // Check each cell for labels
+                    for (let j = 0; j < cells.length - 1; j++) {
+                        const label = cells[j].toLowerCase().trim()
+                        const value = cells[j + 1]?.trim() || ''
+
+                        if ((label.includes('university') || label === 'university') && value) {
+                            extractedInfo.university = value
+                        }
+                        if ((label.includes('dept') || label === 'department' || label === 'dept') && value) {
+                            extractedInfo.department = value
+                        }
+                        if ((label.includes('course') || label === 'course') && value && !label.includes('semester')) {
+                            extractedInfo.course = value
+                        }
+                        if ((label.includes('term') || label === 'term') && value) {
+                            extractedInfo.term = value
+                        }
+                        if ((label.includes('semester') || label === 'semester' || label === 'sem') && value) {
+                            extractedInfo.semester = value
+                        }
+                        if ((label.includes('faculty') || label === 'faculty' || label.includes('teacher')) && value) {
+                            extractedInfo.faculty = value
+                        }
+                        if ((label.includes('created') || label === 'created on' || label === 'createdon') && value) {
+                            extractedInfo.createdOn = value
+                        }
+                        if ((label.includes('creator') || label === 'creator name' || label.includes('creatorname')) && value) {
+                            extractedInfo.creatorName = value
+                        }
+                    }
+                }
+
+                console.log('Extracted metadata from CSV:', extractedInfo)
+
+                // Now parse the actual data rows with PapaParse
+                Papa.parse(file, {
+                    header: true,
+                    skipEmptyLines: true,
+                    transformHeader: (header) => header.trim(),
+                    complete: (results) => {
+                        console.log('Parsed CSV headers:', Object.keys(results.data[0] || {}))
+                        console.log('Sample row:', results.data[0])
+                        resolve({
+                            data: results.data,
+                            metadata: extractedInfo as CourseInfo
+                        })
+                    },
+                    error: (error) => {
+                        reject(error)
+                    }
+                })
+            }
+            reader.onerror = () => reject(new Error('Failed to read file'))
+            reader.readAsText(file)
+        })
+    }
 
     const parseCSV = (file: File): Promise<any[]> => {
         return new Promise((resolve, reject) => {
@@ -268,9 +401,38 @@ export default function ImportPage() {
 
         try {
             let data: any[] = []
+            let extractedMetadata: CourseInfo | null = null
 
             if (file.name.endsWith('.csv')) {
-                data = await parseCSV(file)
+                // Use the enhanced parser that extracts metadata
+                const result = await parseCSVWithMetadata(file)
+                data = result.data
+                extractedMetadata = result.metadata
+
+                // Auto-save extracted college info if found
+                if (extractedMetadata && (extractedMetadata.university || extractedMetadata.department || extractedMetadata.course)) {
+                    const currentInfo = { ...courseInfo }
+                    // Only update fields that were extracted (don't overwrite with empty)
+                    if (extractedMetadata.university) currentInfo.university = extractedMetadata.university
+                    if (extractedMetadata.department) currentInfo.department = extractedMetadata.department
+                    if (extractedMetadata.course) currentInfo.course = extractedMetadata.course
+                    if (extractedMetadata.term) currentInfo.term = extractedMetadata.term
+                    if (extractedMetadata.semester) currentInfo.semester = extractedMetadata.semester
+                    if (extractedMetadata.faculty) currentInfo.faculty = extractedMetadata.faculty
+                    if (extractedMetadata.createdOn) currentInfo.createdOn = extractedMetadata.createdOn
+                    if (extractedMetadata.creatorName) currentInfo.creatorName = extractedMetadata.creatorName
+
+                    // Save to localStorage and update state
+                    localStorage.setItem('teachus_course_info', JSON.stringify(currentInfo))
+                    setCourseInfo(currentInfo)
+
+                    // Broadcast update for real-time sync
+                    window.dispatchEvent(new CustomEvent('teachusDataSync', {
+                        detail: { type: 'course_info', data: currentInfo }
+                    }))
+
+                    console.log('Auto-saved college info from import:', currentInfo)
+                }
             } else if (file.name.endsWith('.json')) {
                 const text = await file.text()
                 data = JSON.parse(text)
@@ -345,9 +507,13 @@ export default function ImportPage() {
                 // Broadcast update for real-time sync
                 broadcastUpdate(importType, normalizedData)
 
+                // Show toast with college info notice if extracted
+                const collegeInfoExtracted = extractedMetadata && (extractedMetadata.university || extractedMetadata.department || extractedMetadata.course)
                 toast({
                     title: "Import Successful! ✅",
-                    description: `${normalizedData.length} ${importType} records imported and synced to dashboard!`,
+                    description: collegeInfoExtracted
+                        ? `${normalizedData.length} ${importType} records imported! College info also extracted and saved.`
+                        : `${normalizedData.length} ${importType} records imported and synced to dashboard!`,
                 })
             }
 
@@ -368,7 +534,7 @@ export default function ImportPage() {
         } finally {
             setImporting(false)
         }
-    }, [activeTab, toast])
+    }, [activeTab, toast, courseInfo])
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
@@ -645,6 +811,101 @@ STU003,Charlie Brown,charlie@college.edu,9876543212,B,3`
                 ))}
             </Tabs>
 
+            {/* College/Institution Info Settings */}
+            <Card className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/20 dark:to-purple-950/20 border-indigo-200 dark:border-indigo-800">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Building2 className="w-5 h-5 text-indigo-600" />
+                        College/Institution Information
+                    </CardTitle>
+                    <CardDescription>
+                        Enter your college details. This information will appear in attendance reports and exports.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="university">University Name</Label>
+                            <Input
+                                id="university"
+                                placeholder="e.g., University of Mumbai"
+                                value={courseInfo.university}
+                                onChange={(e) => updateCourseInfo('university', e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="department">Department</Label>
+                            <Input
+                                id="department"
+                                placeholder="e.g., Computer Science Dept."
+                                value={courseInfo.department}
+                                onChange={(e) => updateCourseInfo('department', e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="course">Course</Label>
+                            <Input
+                                id="course"
+                                placeholder="e.g., B.Sc Computer Science"
+                                value={courseInfo.course}
+                                onChange={(e) => updateCourseInfo('course', e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="term">Term</Label>
+                            <Input
+                                id="term"
+                                placeholder="e.g., 1 or 2"
+                                value={courseInfo.term}
+                                onChange={(e) => updateCourseInfo('term', e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="semester">Semester</Label>
+                            <Input
+                                id="semester"
+                                placeholder="e.g., A or 3rd"
+                                value={courseInfo.semester}
+                                onChange={(e) => updateCourseInfo('semester', e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="faculty">Faculty Name</Label>
+                            <Input
+                                id="faculty"
+                                placeholder="e.g., Dr. John Smith"
+                                value={courseInfo.faculty}
+                                onChange={(e) => updateCourseInfo('faculty', e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="creatorName">Creator/Teacher Name</Label>
+                            <Input
+                                id="creatorName"
+                                placeholder="e.g., Prof. Jane Doe"
+                                value={courseInfo.creatorName}
+                                onChange={(e) => updateCourseInfo('creatorName', e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="createdOn">Created On</Label>
+                            <Input
+                                id="createdOn"
+                                placeholder="e.g., 13 Dec 2025"
+                                value={courseInfo.createdOn}
+                                onChange={(e) => updateCourseInfo('createdOn', e.target.value)}
+                            />
+                        </div>
+                        <div className="flex items-end">
+                            <Button onClick={saveCourseInfo} className="w-full">
+                                <Save className="w-4 h-4 mr-2" />
+                                Save College Info
+                            </Button>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
             {/* Quick Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
@@ -676,3 +937,4 @@ STU003,Charlie Brown,charlie@college.edu,9876543212,B,3`
         </div>
     )
 }
+

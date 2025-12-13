@@ -1,6 +1,7 @@
 // app/api/integrations/discord/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
+import { prisma } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
     try {
@@ -19,12 +20,35 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Use provided webhookUrl or fallback to env
-        const discordWebhookUrl = webhookUrl || process.env.DISCORD_WEBHOOK_URL;
+        // Priority: request body > database > environment variable
+        let discordWebhookUrl = webhookUrl;
+
+        // If not in request, check database
+        if (!discordWebhookUrl) {
+            try {
+                const connection = await prisma.integrationConnection.findFirst({
+                    where: {
+                        organizationId: user.organizationId,
+                        type: 'discord'
+                    }
+                });
+                if (connection?.credentials) {
+                    const creds = connection.credentials as { webhookUrl?: string };
+                    discordWebhookUrl = creds.webhookUrl;
+                }
+            } catch (e) {
+                console.log('[DISCORD] Could not fetch from DB');
+            }
+        }
+
+        // Fallback to environment variable
+        if (!discordWebhookUrl) {
+            discordWebhookUrl = process.env.DISCORD_WEBHOOK_URL;
+        }
 
         if (!discordWebhookUrl) {
             return NextResponse.json(
-                { error: 'Discord integration not configured. Please provide webhookUrl or set DISCORD_WEBHOOK_URL in environment variables.' },
+                { error: 'Discord integration not configured. Please provide webhookUrl, save it in integrations, or set DISCORD_WEBHOOK_URL in environment variables.' },
                 { status: 503 }
             );
         }
@@ -68,5 +92,40 @@ export async function POST(request: NextRequest) {
             { error: error instanceof Error ? error.message : 'Failed to send Discord message' },
             { status: 500 }
         );
+    }
+}
+
+// GET - Check Discord configuration status
+export async function GET() {
+    try {
+        const user = await getCurrentUser();
+
+        // Check environment
+        const envConfigured = !!process.env.DISCORD_WEBHOOK_URL;
+
+        // Check database
+        let dbConfigured = false;
+        if (user?.organizationId) {
+            const connection = await prisma.integrationConnection.findFirst({
+                where: {
+                    organizationId: user.organizationId,
+                    type: 'discord'
+                }
+            });
+            dbConfigured = !!connection;
+        }
+
+        return NextResponse.json({
+            configured: envConfigured || dbConfigured,
+            sources: {
+                env: envConfigured,
+                db: dbConfigured
+            }
+        });
+    } catch (error) {
+        return NextResponse.json({
+            configured: !!process.env.DISCORD_WEBHOOK_URL,
+            sources: { env: !!process.env.DISCORD_WEBHOOK_URL, db: false }
+        });
     }
 }

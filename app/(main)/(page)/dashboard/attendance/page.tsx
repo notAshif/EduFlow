@@ -1,7 +1,8 @@
 // app/dashboard/attendance/page.tsx
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import React from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -18,7 +19,12 @@ import {
   AlertCircle,
   RefreshCw,
   BarChart3,
-  TrendingUp
+  TrendingUp,
+  FileSpreadsheet,
+  Download,
+  Building2,
+  GraduationCap,
+  User
 } from 'lucide-react'
 
 interface Student {
@@ -26,6 +32,8 @@ interface Student {
   name: string
   email: string
   studentId: string
+  division?: string
+  semester?: string
 }
 
 interface TeachUsAttendance {
@@ -37,6 +45,35 @@ interface TeachUsAttendance {
   lectureTime: string
 }
 
+interface CourseInfo {
+  university: string
+  department: string
+  course: string
+  term: string
+  semester: string
+  faculty: string
+  createdOn: string
+  creatorName: string
+}
+
+// Calculate attendance stats per student per subject
+interface StudentAttendanceStats {
+  studentId: string
+  name: string
+  subjects: {
+    [subject: string]: {
+      lecturesTaken: number
+      lecturesAttended: number
+      percentage: number
+    }
+  }
+  overall: {
+    lecturesTaken: number
+    lecturesAttended: number
+    percentage: number
+  }
+}
+
 export default function AttendancePage() {
   const [students, setStudents] = useState<Student[]>([])
   const [attendanceRecords, setAttendanceRecords] = useState<Record<string, string>>({})
@@ -46,9 +83,43 @@ export default function AttendancePage() {
   const [loading, setLoading] = useState(true)
   const [importedData, setImportedData] = useState<TeachUsAttendance[]>([])
   const [hasImportedData, setHasImportedData] = useState(false)
+  const [viewMode, setViewMode] = useState<'spreadsheet' | 'list'>('spreadsheet')
+
+  // Course information - loaded dynamically from localStorage
+  const [courseInfo, setCourseInfo] = useState<CourseInfo>({
+    university: '',
+    department: '',
+    course: '',
+    term: '',
+    semester: '',
+    faculty: '',
+    createdOn: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+    creatorName: ''
+  })
 
   // Load imported data from localStorage
   const loadImportedData = useCallback(() => {
+    // Load Course/College Info from localStorage
+    const savedCourseInfo = localStorage.getItem('teachus_course_info')
+    if (savedCourseInfo) {
+      try {
+        const parsedInfo = JSON.parse(savedCourseInfo)
+        setCourseInfo(prev => ({
+          ...prev,
+          university: parsedInfo.university || '',
+          department: parsedInfo.department || '',
+          course: parsedInfo.course || '',
+          term: parsedInfo.term || '',
+          semester: parsedInfo.semester || '',
+          faculty: parsedInfo.faculty || '',
+          createdOn: parsedInfo.createdOn || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+          creatorName: parsedInfo.creatorName || ''
+        }))
+      } catch (e) {
+        console.log('Error parsing course info:', e)
+      }
+    }
+
     // Load Students
     const studentsData = localStorage.getItem('teachus_students')
     let importedStudents: Student[] = []
@@ -59,7 +130,9 @@ export default function AttendancePage() {
         id: s.rollNo || s.studentId || `STU-${Math.random().toString(36).substr(2, 9)}`,
         name: s.name,
         email: s.email || `${s.name.toLowerCase().replace(' ', '.')}@college.edu`,
-        studentId: s.rollNo || s.studentId || 'Unknown'
+        studentId: s.rollNo || s.studentId || 'Unknown',
+        division: s.division || 'A',
+        semester: s.semester || '1'
       }))
     }
 
@@ -87,33 +160,27 @@ export default function AttendancePage() {
     }
 
     setStudents(importedStudents)
-    // We have data if we have students OR attendance records
     setHasImportedData(importedStudents.length > 0 || (attendanceData ? JSON.parse(attendanceData).length > 0 : false))
-
     setLoading(false)
   }, [])
 
   useEffect(() => {
     loadImportedData()
 
-    // Listen for TeachUs data sync events
     const handleDataSync = (event: CustomEvent) => {
-      if (event.detail.type === 'attendance' || event.detail.type === 'students') {
+      if (event.detail.type === 'attendance' || event.detail.type === 'students' || event.detail.type === 'course_info') {
         loadImportedData()
       }
     }
 
-    // Listen for storage changes (cross-tab sync)
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'teachus_attendance' || e.key === 'teachus_students') {
+      if (e.key === 'teachus_attendance' || e.key === 'teachus_students' || e.key === 'teachus_course_info') {
         loadImportedData()
       }
     }
 
     window.addEventListener('teachusDataSync', handleDataSync as EventListener)
     window.addEventListener('storage', handleStorageChange)
-
-    // Poll for changes every 2 seconds (backup for same-tab updates)
     const interval = setInterval(loadImportedData, 2000)
 
     return () => {
@@ -123,92 +190,120 @@ export default function AttendancePage() {
     }
   }, [loadImportedData])
 
-  const handleStatusChange = (studentId: string, status: string) => {
-    setAttendanceRecords(prev => ({
-      ...prev,
-      [studentId]: status
-    }))
-  }
+  // Get unique subjects from imported data
+  const subjects = useMemo(() => [...new Set(importedData.map(r => r.subject))], [importedData])
 
-  const handleSaveAttendance = async () => {
-    try {
-      const records = Object.entries(attendanceRecords).map(([studentId, status]) => {
-        const student = students.find(s => s.id === studentId)
-        return {
-          studentId,
-          name: student?.name || 'Unknown',
-          date: selectedDate,
-          status: status as 'present' | 'absent' | 'late',
-          subject: selectedClass || 'General',
-          lectureTime: new Date().toLocaleTimeString()
-        }
+  // Calculate student attendance stats per subject
+  const studentStats = useMemo((): StudentAttendanceStats[] => {
+    const statsMap = new Map<string, StudentAttendanceStats>()
+
+    // Initialize stats for all students
+    students.forEach(student => {
+      const subjectsStats: StudentAttendanceStats['subjects'] = {}
+      subjects.forEach(subject => {
+        subjectsStats[subject] = { lecturesTaken: 0, lecturesAttended: 0, percentage: 0 }
       })
-
-      // Merge with existing imported data
-      const existingData = [...importedData]
-      records.forEach(newRecord => {
-        const index = existingData.findIndex(
-          r => r.studentId === newRecord.studentId && r.date === newRecord.date
-        )
-        if (index >= 0) {
-          existingData[index] = newRecord
-        } else {
-          existingData.push(newRecord)
-        }
+      statsMap.set(student.id, {
+        studentId: student.studentId,
+        name: student.name,
+        subjects: subjectsStats,
+        overall: { lecturesTaken: 0, lecturesAttended: 0, percentage: 0 }
       })
-
-      // Save to localStorage
-      localStorage.setItem('teachus_attendance', JSON.stringify(existingData))
-      setImportedData(existingData)
-      setHasImportedData(true)
-
-      // Reset form
-      setAttendanceRecords({})
-      alert('Attendance saved successfully!')
-    } catch (error) {
-      console.error('Failed to save attendance:', error)
-      alert('Failed to save attendance')
-    }
-  }
-
-  // Auto-fill from imported data for selected date
-  const autoFillFromImport = () => {
-    const dateRecords = importedData.filter(r => r.date === selectedDate)
-    if (dateRecords.length === 0) {
-      alert('No imported records found for this date')
-      return
-    }
-
-    const newRecords: Record<string, string> = {}
-    dateRecords.forEach(record => {
-      newRecords[record.studentId] = record.status
     })
-    setAttendanceRecords(newRecords)
+
+    // Calculate lectures taken per subject (total unique dates per subject)
+    const lecturesPerSubject: { [subject: string]: Set<string> } = {}
+    subjects.forEach(subject => {
+      lecturesPerSubject[subject] = new Set()
+    })
+    importedData.forEach(record => {
+      if (lecturesPerSubject[record.subject]) {
+        lecturesPerSubject[record.subject].add(record.date)
+      }
+    })
+
+    // Process attendance records
+    importedData.forEach(record => {
+      const stats = statsMap.get(record.studentId)
+      if (stats && stats.subjects[record.subject]) {
+        stats.subjects[record.subject].lecturesTaken = lecturesPerSubject[record.subject].size
+        if (record.status === 'present' || record.status === 'late') {
+          stats.subjects[record.subject].lecturesAttended++
+        }
+      }
+    })
+
+    // Calculate percentages and overall stats
+    statsMap.forEach((stats) => {
+      let totalTaken = 0
+      let totalAttended = 0
+
+      Object.values(stats.subjects).forEach(subjectStats => {
+        if (subjectStats.lecturesTaken > 0) {
+          subjectStats.percentage = Math.round((subjectStats.lecturesAttended / subjectStats.lecturesTaken) * 100)
+        }
+        totalTaken += subjectStats.lecturesTaken
+        totalAttended += subjectStats.lecturesAttended
+      })
+
+      stats.overall.lecturesTaken = totalTaken
+      stats.overall.lecturesAttended = totalAttended
+      stats.overall.percentage = totalTaken > 0 ? Math.round((totalAttended / totalTaken) * 100) : 0
+    })
+
+    return Array.from(statsMap.values())
+  }, [students, importedData, subjects])
+
+  // Get color based on percentage (TeachUs style)
+  const getPercentageColor = (percentage: number): string => {
+    if (percentage >= 75) return 'bg-green-500 text-white'
+    if (percentage >= 55) return 'bg-yellow-400 text-black'
+    if (percentage >= 40) return 'bg-orange-400 text-black'
+    if (percentage >= 20) return 'bg-orange-300 text-black'
+    return 'bg-red-500 text-white'
   }
 
-  const filteredStudents = students.filter(student =>
-    student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    student.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    student.studentId.toLowerCase().includes(searchQuery.toLowerCase())
+  const getPercentageBgColor = (percentage: number): string => {
+    if (percentage >= 75) return '#22c55e'
+    if (percentage >= 55) return '#facc15'
+    if (percentage >= 40) return '#fb923c'
+    if (percentage >= 20) return '#fdba74'
+    return '#ef4444'
+  }
+
+  // Filter students based on search
+  const filteredStats = studentStats.filter(s =>
+    s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.studentId.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  // Get unique dates from imported data
-  const importedDates = [...new Set(importedData.map(r => r.date))].sort().reverse()
+  // Export to CSV function
+  const exportToCSV = () => {
+    let csv = 'Roll Number,Full Name'
+    subjects.forEach(subject => {
+      csv += `,${subject} - Lectures Taken,${subject} - Lectures Attended,${subject} - %`
+    })
+    csv += ',Total Lectures,Total Attended,Overall %\n'
 
-  // Get attendance records grouped by date
-  const importedRecordsByDate = importedData.reduce((acc, record) => {
-    if (!acc[record.date]) {
-      acc[record.date] = { total: 0, present: 0, absent: 0, late: 0 }
-    }
-    acc[record.date].total++
-    acc[record.date][record.status]++
-    return acc
-  }, {} as Record<string, { total: number; present: number; absent: number; late: number }>)
+    filteredStats.forEach(stat => {
+      csv += `${stat.studentId},"${stat.name}"`
+      subjects.forEach(subject => {
+        const subjectStat = stat.subjects[subject]
+        csv += `,${subjectStat.lecturesTaken},${subjectStat.lecturesAttended},${subjectStat.percentage}%`
+      })
+      csv += `,${stat.overall.lecturesTaken},${stat.overall.lecturesAttended},${stat.overall.percentage}%\n`
+    })
 
-  // Get unique subjects from imported data
-  const subjects = [...new Set(importedData.map(r => r.subject))]
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'attendance_report.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
-  // Calculate overall attendance rate
+  // Overall attendance rate
   const overallStats = {
     total: importedData.length,
     present: importedData.filter(r => r.status === 'present').length,
@@ -216,16 +311,8 @@ export default function AttendancePage() {
     late: importedData.filter(r => r.status === 'late').length,
   }
   const attendanceRate = overallStats.total > 0
-    ? Math.round((overallStats.present / overallStats.total) * 100)
+    ? Math.round(((overallStats.present + overallStats.late) / overallStats.total) * 100)
     : 0
-
-  const attendanceStats = {
-    total: students.length,
-    present: Object.values(attendanceRecords).filter(status => status === 'present').length,
-    absent: Object.values(attendanceRecords).filter(status => status === 'absent').length,
-    late: Object.values(attendanceRecords).filter(status => status === 'late').length,
-    excused: Object.values(attendanceRecords).filter(status => status === 'excused').length,
-  }
 
   if (loading) {
     return (
@@ -235,7 +322,6 @@ export default function AttendancePage() {
     )
   }
 
-  // Show professional empty state if no data
   if (!hasImportedData) {
     return (
       <div className="space-y-6">
@@ -271,19 +357,314 @@ export default function AttendancePage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Attendance</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">Track and manage student attendance records</p>
-        </div>
-        <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400 px-3 py-1.5">
-          <CheckCircle className="w-3.5 h-3.5 mr-1.5" />
-          {importedData.length} Records • {attendanceRate}% Attendance Rate
-        </Badge>
-      </div>
+      {/* TeachUs Style Spreadsheet View */}
+      <Card className="overflow-hidden">
+        <CardContent className="p-0">
+          {/* Spreadsheet Container */}
+          <div className="overflow-x-auto">
+            <div className="min-w-[1200px]">
+              {/* Header Section - University & Course Info */}
+              <div className="bg-white dark:bg-gray-900 border-b border-gray-300 dark:border-gray-700">
+                <table className="w-full border-collapse text-sm">
+                  <tbody>
+                    <tr>
+                      <td className="border border-gray-300 dark:border-gray-600 px-3 py-1.5 font-medium bg-gray-50 dark:bg-gray-800 w-32">
+                        <div className="flex items-center gap-2">
+                          <Building2 className="w-4 h-4 text-gray-500" />
+                          University
+                        </div>
+                      </td>
+                      <td className="border border-gray-300 dark:border-gray-600 px-3 py-1.5" colSpan={2}>
+                        {courseInfo.university || <span className="text-gray-400 italic">Set in Import → College Info</span>}
+                      </td>
+                      <td className="border border-gray-300 dark:border-gray-600 px-3 py-1.5 font-medium bg-gray-50 dark:bg-gray-800 w-24">
+                        Dept
+                      </td>
+                      <td className="border border-gray-300 dark:border-gray-600 px-3 py-1.5" colSpan={3}>
+                        {courseInfo.department || <span className="text-gray-400 italic">Set in Import → College Info</span>}
+                      </td>
+                      {/* Legend */}
+                      <td className="border border-gray-300 dark:border-gray-600 px-3 py-1.5 font-semibold bg-gray-100 dark:bg-gray-800 text-center" rowSpan={6}>
+                        <div className="space-y-1">
+                          <div className="font-bold mb-2">Legend</div>
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="w-4 h-4 rounded bg-green-500"></span>
+                            <span>≥75.0%: Satisfactory</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="w-4 h-4 rounded bg-yellow-400"></span>
+                            <span>55-74.99%: Unsatisfactory</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="w-4 h-4 rounded bg-orange-400"></span>
+                            <span>40-54.99%: Moderate</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="w-4 h-4 rounded bg-orange-300"></span>
+                            <span>20-39.99%: Very Moderate</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="w-4 h-4 rounded bg-red-500"></span>
+                            <span>&lt;20%: Very Very Moderate</span>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="border border-gray-300 dark:border-gray-600 px-3 py-1.5 font-medium bg-gray-50 dark:bg-gray-800">
+                        <div className="flex items-center gap-2">
+                          <GraduationCap className="w-4 h-4 text-gray-500" />
+                          Course
+                        </div>
+                      </td>
+                      <td className="border border-gray-300 dark:border-gray-600 px-3 py-1.5" colSpan={2}>
+                        {courseInfo.course || <span className="text-gray-400 italic">-</span>}
+                      </td>
+                      <td className="border border-gray-300 dark:border-gray-600 px-3 py-1.5 font-medium bg-gray-50 dark:bg-gray-800">
+                        Term
+                      </td>
+                      <td className="border border-gray-300 dark:border-gray-600 px-3 py-1.5" colSpan={3}>
+                        {courseInfo.term || <span className="text-gray-400 italic">-</span>}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="border border-gray-300 dark:border-gray-600 px-3 py-1.5 font-medium bg-gray-50 dark:bg-gray-800">
+                        Semester
+                      </td>
+                      <td className="border border-gray-300 dark:border-gray-600 px-3 py-1.5" colSpan={2}>
+                        {courseInfo.semester || <span className="text-gray-400 italic">-</span>}
+                      </td>
+                      <td className="border border-gray-300 dark:border-gray-600 px-3 py-1.5 font-medium bg-gray-50 dark:bg-gray-800">
+                        Semester
+                      </td>
+                      <td className="border border-gray-300 dark:border-gray-600 px-3 py-1.5" colSpan={3}>
+                        {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="border border-gray-300 dark:border-gray-600 px-3 py-1.5 font-medium bg-gray-50 dark:bg-gray-800">
+                        <div className="flex items-center gap-2">
+                          <User className="w-4 h-4 text-gray-500" />
+                          Faculty
+                        </div>
+                      </td>
+                      <td className="border border-gray-300 dark:border-gray-600 px-3 py-1.5" colSpan={2}>
+                        {courseInfo.faculty || <span className="text-gray-400 italic">-</span>}
+                      </td>
+                      <td className="border border-gray-300 dark:border-gray-600 px-3 py-1.5 font-medium bg-gray-50 dark:bg-gray-800">
+                        Created On
+                      </td>
+                      <td className="border border-gray-300 dark:border-gray-600 px-3 py-1.5" colSpan={3}>
+                        {courseInfo.createdOn}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="border border-gray-300 dark:border-gray-600 px-3 py-1.5 font-medium bg-gray-50 dark:bg-gray-800">
+                        Creator Name
+                      </td>
+                      <td className="border border-gray-300 dark:border-gray-600 px-3 py-1.5" colSpan={6}>
+                        {courseInfo.creatorName || <span className="text-gray-400 italic">Set in Import → College Info</span>}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
 
-      {/* Stats from Imported Data */}
+              {/* Spacer row */}
+              <div className="h-4 bg-gray-100 dark:bg-gray-800"></div>
+
+              {/* Main Attendance Table */}
+              <div className="bg-white dark:bg-gray-900">
+                <table className="w-full border-collapse text-sm">
+                  {/* Table Header - Row 1: Lecture of Name/Date Range */}
+                  <thead>
+                    <tr className="bg-gray-50 dark:bg-gray-800">
+                      <th className="border border-gray-300 dark:border-gray-600 px-3 py-2 text-left font-semibold w-8" rowSpan={3}>
+                        #
+                      </th>
+                      <th className="border border-gray-300 dark:border-gray-600 px-3 py-2 text-left font-semibold w-28" rowSpan={3}>
+                        Roll Number
+                      </th>
+                      <th className="border border-gray-300 dark:border-gray-600 px-3 py-2 text-left font-semibold w-48" rowSpan={3}>
+                        Full Name
+                      </th>
+                      {subjects.length > 0 && (
+                        <>
+                          <th
+                            className="border border-gray-300 dark:border-gray-600 px-3 py-2 text-center font-semibold bg-blue-50 dark:bg-blue-950/30"
+                            colSpan={subjects.length * 3}
+                          >
+                            Lecture of Name
+                          </th>
+                          <th
+                            className="border border-gray-300 dark:border-gray-600 px-3 py-2 text-center font-semibold bg-green-50 dark:bg-green-950/30"
+                            colSpan={3}
+                          >
+                            Anil Sir Data Range
+                          </th>
+                        </>
+                      )}
+                    </tr>
+                    {/* Row 2: Subject Names */}
+                    <tr className="bg-gray-50 dark:bg-gray-800">
+                      {subjects.map((subject, idx) => (
+                        <th
+                          key={subject}
+                          className="border border-gray-300 dark:border-gray-600 px-3 py-2 text-center font-semibold bg-blue-50 dark:bg-blue-950/30"
+                          colSpan={3}
+                        >
+                          <div className="flex flex-col items-center">
+                            <span>{subject}</span>
+                            <span className="text-xs font-normal text-gray-500">
+                              {studentStats[0]?.subjects[subject]?.lecturesTaken || 0} lectures
+                            </span>
+                          </div>
+                        </th>
+                      ))}
+                      <th
+                        className="border border-gray-300 dark:border-gray-600 px-3 py-2 text-center font-semibold bg-green-50 dark:bg-green-950/30"
+                        colSpan={3}
+                      >
+                        <div className="flex flex-col items-center">
+                          <span>Field Section/ce</span>
+                          <span className="text-xs font-normal text-gray-500">Overall</span>
+                        </div>
+                      </th>
+                    </tr>
+                    {/* Row 3: Lectures Taken / Attended / % */}
+                    <tr className="bg-gray-100 dark:bg-gray-700">
+                      {subjects.map(subject => (
+                        <React.Fragment key={`header-${subject}`}>
+                          <th className="border border-gray-300 dark:border-gray-600 px-2 py-1.5 text-center text-xs font-medium">
+                            Lectures Taken
+                          </th>
+                          <th className="border border-gray-300 dark:border-gray-600 px-2 py-1.5 text-center text-xs font-medium">
+                            Lectures Attended
+                          </th>
+                          <th className="border border-gray-300 dark:border-gray-600 px-2 py-1.5 text-center text-xs font-medium">
+                            %
+                          </th>
+                        </React.Fragment>
+                      ))}
+                      <th className="border border-gray-300 dark:border-gray-600 px-2 py-1.5 text-center text-xs font-medium bg-green-50 dark:bg-green-950/30">
+                        Lectures Taken
+                      </th>
+                      <th className="border border-gray-300 dark:border-gray-600 px-2 py-1.5 text-center text-xs font-medium bg-green-50 dark:bg-green-950/30">
+                        Lectures Attended
+                      </th>
+                      <th className="border border-gray-300 dark:border-gray-600 px-2 py-1.5 text-center text-xs font-medium bg-green-50 dark:bg-green-950/30">
+                        %
+                      </th>
+                    </tr>
+                  </thead>
+                  {/* Table Body - Student Rows */}
+                  <tbody>
+                    {filteredStats.map((stat, index) => (
+                      <tr
+                        key={stat.studentId}
+                        className={`${index % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50'} hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-colors`}
+                      >
+                        <td className="border border-gray-300 dark:border-gray-600 px-3 py-2 text-center font-medium">
+                          {index + 1}
+                        </td>
+                        <td className="border border-gray-300 dark:border-gray-600 px-3 py-2 font-medium">
+                          {stat.studentId}
+                        </td>
+                        <td className="border border-gray-300 dark:border-gray-600 px-3 py-2">
+                          {stat.name}
+                        </td>
+                        {subjects.map(subject => {
+                          const subjectStat = stat.subjects[subject]
+                          return (
+                            <React.Fragment key={`${stat.studentId}-${subject}`}>
+                              <td className="border border-gray-300 dark:border-gray-600 px-2 py-2 text-center">
+                                {subjectStat.lecturesTaken}
+                              </td>
+                              <td className="border border-gray-300 dark:border-gray-600 px-2 py-2 text-center">
+                                {subjectStat.lecturesAttended}
+                              </td>
+                              <td
+                                className={`border border-gray-300 dark:border-gray-600 px-2 py-2 text-center font-semibold ${getPercentageColor(subjectStat.percentage)}`}
+                              >
+                                {subjectStat.percentage}%
+                              </td>
+                            </React.Fragment>
+                          )
+                        })}
+                        {/* Overall Stats */}
+                        <td className="border border-gray-300 dark:border-gray-600 px-2 py-2 text-center bg-green-50 dark:bg-green-950/10">
+                          {stat.overall.lecturesTaken}
+                        </td>
+                        <td className="border border-gray-300 dark:border-gray-600 px-2 py-2 text-center bg-green-50 dark:bg-green-950/10">
+                          {stat.overall.lecturesAttended}
+                        </td>
+                        <td
+                          className={`border border-gray-300 dark:border-gray-600 px-2 py-2 text-center font-semibold ${getPercentageColor(stat.overall.percentage)}`}
+                        >
+                          {stat.overall.percentage}%
+                        </td>
+                      </tr>
+                    ))}
+                    {/* Empty rows for visual consistency */}
+                    {Array.from({ length: Math.max(0, 10 - filteredStats.length) }).map((_, idx) => (
+                      <tr key={`empty-${idx}`} className={`${(filteredStats.length + idx) % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50'}`}>
+                        <td className="border border-gray-300 dark:border-gray-600 px-3 py-2 text-center text-gray-400">
+                          {filteredStats.length + idx + 1}
+                        </td>
+                        <td className="border border-gray-300 dark:border-gray-600 px-3 py-2"></td>
+                        <td className="border border-gray-300 dark:border-gray-600 px-3 py-2"></td>
+                        {subjects.map(subject => (
+                          <React.Fragment key={`empty-${idx}-${subject}`}>
+                            <td className="border border-gray-300 dark:border-gray-600 px-2 py-2"></td>
+                            <td className="border border-gray-300 dark:border-gray-600 px-2 py-2"></td>
+                            <td className="border border-gray-300 dark:border-gray-600 px-2 py-2"></td>
+                          </React.Fragment>
+                        ))}
+                        <td className="border border-gray-300 dark:border-gray-600 px-2 py-2 bg-green-50 dark:bg-green-950/10"></td>
+                        <td className="border border-gray-300 dark:border-gray-600 px-2 py-2 bg-green-50 dark:bg-green-950/10"></td>
+                        <td className="border border-gray-300 dark:border-gray-600 px-2 py-2 bg-green-50 dark:bg-green-950/10"></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Bar */}
+          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  placeholder="Search students..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 w-64"
+                />
+              </div>
+              <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
+                {filteredStats.length} Students
+              </Badge>
+              <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400">
+                {attendanceRate}% Overall Attendance
+              </Badge>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={exportToCSV}>
+                <Download className="w-4 h-4 mr-2" />
+                Export CSV
+              </Button>
+              <Button variant="outline" size="sm" onClick={loadImportedData}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Refresh
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Quick Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/20 dark:to-blue-900/10 border-blue-200 dark:border-blue-800">
           <CardContent className="p-4 text-center">
@@ -311,207 +692,11 @@ export default function AttendancePage() {
         </Card>
         <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/20 dark:to-purple-900/10 border-purple-200 dark:border-purple-800">
           <CardContent className="p-4 text-center">
-            <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">{importedDates.length}</p>
-            <p className="text-sm text-purple-600/70 dark:text-purple-400/70 font-medium">Days</p>
+            <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">{subjects.length}</p>
+            <p className="text-sm text-purple-600/70 dark:text-purple-400/70 font-medium">Subjects</p>
           </CardContent>
         </Card>
       </div>
-
-      {/* Mark New Attendance */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Mark Attendance</span>
-            {importedDates.includes(selectedDate) && (
-              <Button size="sm" variant="outline" onClick={autoFillFromImport}>
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Load Imported Data
-              </Button>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="date">Date</Label>
-              <Input
-                id="date"
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="class">Subject/Class</Label>
-              <Select value={selectedClass} onValueChange={setSelectedClass}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select subject" />
-                </SelectTrigger>
-                <SelectContent>
-                  {subjects.length > 0 ? (
-                    subjects.map(subject => (
-                      <SelectItem key={subject} value={subject}>{subject}</SelectItem>
-                    ))
-                  ) : (
-                    <>
-                      <SelectItem value="general">General</SelectItem>
-                      <SelectItem value="mathematics">Mathematics</SelectItem>
-                      <SelectItem value="science">Science</SelectItem>
-                      <SelectItem value="english">English</SelectItem>
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="search">Search Students</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  id="search"
-                  placeholder="Search by name or ID..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Stats for Current Session */}
-          {Object.keys(attendanceRecords).length > 0 && (
-            <div className="grid grid-cols-4 gap-4 p-4 bg-muted/50 rounded-lg">
-              <div className="text-center">
-                <p className="text-xl font-bold">{attendanceStats.total}</p>
-                <p className="text-xs text-muted-foreground">Total</p>
-              </div>
-              <div className="text-center">
-                <p className="text-xl font-bold text-green-600">{attendanceStats.present}</p>
-                <p className="text-xs text-muted-foreground">Present</p>
-              </div>
-              <div className="text-center">
-                <p className="text-xl font-bold text-red-600">{attendanceStats.absent}</p>
-                <p className="text-xs text-muted-foreground">Absent</p>
-              </div>
-              <div className="text-center">
-                <p className="text-xl font-bold text-orange-600">{attendanceStats.late}</p>
-                <p className="text-xs text-muted-foreground">Late</p>
-              </div>
-            </div>
-          )}
-
-          {/* Student List */}
-          <div className="space-y-2 max-h-96 overflow-y-auto">
-            {filteredStudents.map((student) => (
-              <div key={student.id} className="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-muted/50 transition-colors">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                    <span className="text-sm font-medium text-primary">
-                      {student.name.split(' ').map(n => n[0]).join('')}
-                    </span>
-                  </div>
-                  <div>
-                    <div className="font-medium dark:text-gray-100">{student.name}</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">{student.studentId}</div>
-                  </div>
-                </div>
-                <Select
-                  value={attendanceRecords[student.id] || ''}
-                  onValueChange={(value) => handleStatusChange(student.id, value)}
-                >
-                  <SelectTrigger className="w-32">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="present">
-                      <span className="flex items-center gap-2">
-                        <CheckCircle className="w-3 h-3 text-green-600" />
-                        Present
-                      </span>
-                    </SelectItem>
-                    <SelectItem value="absent">
-                      <span className="flex items-center gap-2">
-                        <XCircle className="w-3 h-3 text-red-600" />
-                        Absent
-                      </span>
-                    </SelectItem>
-                    <SelectItem value="late">
-                      <span className="flex items-center gap-2">
-                        <Clock className="w-3 h-3 text-orange-600" />
-                        Late
-                      </span>
-                    </SelectItem>
-                    <SelectItem value="excused">
-                      <span className="flex items-center gap-2">
-                        <AlertCircle className="w-3 h-3 text-blue-600" />
-                        Excused
-                      </span>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            ))}
-          </div>
-
-          {/* Save Button */}
-          <div className="flex justify-end">
-            <Button
-              onClick={handleSaveAttendance}
-              disabled={Object.keys(attendanceRecords).length === 0}
-            >
-              Save Attendance
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Imported Attendance History */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5" />
-            Attendance History
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {Object.entries(importedRecordsByDate).slice(0, 10).map(([date, stats]) => {
-              const rate = Math.round((stats.present / stats.total) * 100)
-              return (
-                <div key={date} className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
-                      <Calendar className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                      <div className="font-medium dark:text-gray-100">
-                        {new Date(date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                      </div>
-                      <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-                        <span className="flex items-center gap-1">
-                          <CheckCircle className="w-3 h-3 text-green-600" />
-                          {stats.present}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <XCircle className="w-3 h-3 text-red-600" />
-                          {stats.absent}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-orange-600" />
-                          {stats.late}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <Badge variant={rate >= 80 ? "default" : rate >= 60 ? "secondary" : "destructive"}>
-                    {rate}%
-                  </Badge>
-                </div>
-              )
-            })}
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }

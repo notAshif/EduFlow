@@ -19,9 +19,26 @@ export class TwilioSmsNode extends BaseNode {
     console.log('[TWILIO SMS] To:', to);
     console.log('[TWILIO SMS] Message:', message);
 
-    const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
-    const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
-    const twilioPhoneFrom = process.env.TWILIO_PHONE_NUMBER?.replace('whatsapp:', '') || '+14155238886';
+    // Get Twilio credentials from: config > integration credentials > environment
+    let twilioAccountSid = this.config.accountSid;
+    let twilioAuthToken = this.config.authToken;
+    let twilioPhoneFrom = this.config.fromNumber;
+
+    // Try integration credentials
+    if ((!twilioAccountSid || !twilioAuthToken) && context.services?.credentials) {
+      const creds = context.services.credentials;
+      twilioAccountSid = twilioAccountSid || creds.accountSid;
+      twilioAuthToken = twilioAuthToken || creds.authToken;
+      twilioPhoneFrom = twilioPhoneFrom || creds.phoneNumber || creds.fromNumber;
+      if (creds.accountSid) {
+        console.log('[TWILIO SMS] Using credentials from integration');
+      }
+    }
+
+    // Fallback to environment variables
+    twilioAccountSid = twilioAccountSid || process.env.TWILIO_ACCOUNT_SID;
+    twilioAuthToken = twilioAuthToken || process.env.TWILIO_AUTH_TOKEN;
+    twilioPhoneFrom = twilioPhoneFrom || process.env.TWILIO_PHONE_NUMBER?.replace('whatsapp:', '') || '+14155238886';
 
     console.log('[TWILIO SMS] Credentials check:');
     console.log('  - Account SID:', twilioAccountSid ? '✓ Set' : '✗ Not set');
@@ -35,6 +52,7 @@ export class TwilioSmsNode extends BaseNode {
         preview: `Would send SMS to ${to}: ${message}`,
         to,
         body: message,
+        note: 'Configure Twilio in Integration page or set TWILIO_* environment variables',
         timestamp: new Date().toISOString(),
         durationMs: Date.now() - startTime,
       };
@@ -64,7 +82,6 @@ export class TwilioSmsNode extends BaseNode {
 
       const responseText = await response.text();
       console.log('[TWILIO SMS] Response status:', response.status);
-      console.log('[TWILIO SMS] Response:', responseText);
 
       const data = JSON.parse(responseText);
 

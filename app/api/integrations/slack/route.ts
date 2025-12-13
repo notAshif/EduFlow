@@ -1,6 +1,7 @@
 // app/api/integrations/slack/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
+import { prisma } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
     try {
@@ -19,12 +20,35 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Use provided webhookUrl or fallback to env
-        const slackWebhookUrl = webhookUrl || process.env.SLACK_WEBHOOK_URL;
+        // Priority: request body > database > environment variable
+        let slackWebhookUrl = webhookUrl;
+
+        // If not in request, check database
+        if (!slackWebhookUrl) {
+            try {
+                const connection = await prisma.integrationConnection.findFirst({
+                    where: {
+                        organizationId: user.organizationId,
+                        type: 'slack'
+                    }
+                });
+                if (connection?.credentials) {
+                    const creds = connection.credentials as { webhookUrl?: string };
+                    slackWebhookUrl = creds.webhookUrl;
+                }
+            } catch (e) {
+                console.log('[SLACK] Could not fetch from DB');
+            }
+        }
+
+        // Fallback to environment variable
+        if (!slackWebhookUrl) {
+            slackWebhookUrl = process.env.SLACK_WEBHOOK_URL;
+        }
 
         if (!slackWebhookUrl) {
             return NextResponse.json(
-                { error: 'Slack integration not configured. Please provide webhookUrl or set SLACK_WEBHOOK_URL in environment variables.' },
+                { error: 'Slack integration not configured. Please provide webhookUrl, save it in integrations, or set SLACK_WEBHOOK_URL in environment variables.' },
                 { status: 503 }
             );
         }
@@ -68,5 +92,40 @@ export async function POST(request: NextRequest) {
             { error: error instanceof Error ? error.message : 'Failed to send Slack message' },
             { status: 500 }
         );
+    }
+}
+
+// GET - Check Slack configuration status
+export async function GET() {
+    try {
+        const user = await getCurrentUser();
+
+        // Check environment
+        const envConfigured = !!process.env.SLACK_WEBHOOK_URL;
+
+        // Check database
+        let dbConfigured = false;
+        if (user?.organizationId) {
+            const connection = await prisma.integrationConnection.findFirst({
+                where: {
+                    organizationId: user.organizationId,
+                    type: 'slack'
+                }
+            });
+            dbConfigured = !!connection;
+        }
+
+        return NextResponse.json({
+            configured: envConfigured || dbConfigured,
+            sources: {
+                env: envConfigured,
+                db: dbConfigured
+            }
+        });
+    } catch (error) {
+        return NextResponse.json({
+            configured: !!process.env.SLACK_WEBHOOK_URL,
+            sources: { env: !!process.env.SLACK_WEBHOOK_URL, db: false }
+        });
     }
 }

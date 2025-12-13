@@ -2,6 +2,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { useAuth } from '@clerk/nextjs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -21,7 +22,9 @@ import {
     Search,
     ArrowRight,
     MoreHorizontal,
-    Info
+    Info,
+    LogIn,
+    Loader2
 } from 'lucide-react'
 import Link from 'next/link'
 import { useToast } from '@/hooks/use-toast'
@@ -175,6 +178,7 @@ function ActivityCard({ stats }: { stats: DashboardStats }) {
 // --- Main Page Component ---
 
 export default function DashboardPage() {
+    const { isLoaded, isSignedIn } = useAuth()
     const [stats, setStats] = useState<DashboardStats>({
         totalWorkflows: 0,
         activeWorkflows: 0,
@@ -197,41 +201,46 @@ export default function DashboardPage() {
     const eventSourceRef = useRef<EventSource | null>(null)
     const { toast } = useToast()
 
-    // Fetch initial data
+    // Fetch initial data - only when signed in
     useEffect(() => {
+        if (!isLoaded) return
+
+        if (!isSignedIn) {
+            setLoading(false)
+            return
+        }
+
         const fetchInitialData = async () => {
             try {
                 setLoading(true)
 
-                // Fetch stats
+                // Fetch stats - handle 401 gracefully
                 const statsRes = await fetch('/api/dashboard/stats')
-                const statsData = await statsRes.json()
-
-                if (statsData.ok) {
-                    setStats(statsData.data)
+                if (statsRes.ok) {
+                    const statsData = await statsRes.json()
+                    if (statsData.ok) {
+                        setStats(statsData.data)
+                    }
                 }
 
-                // Fetch recent runs
+                // Fetch recent runs - handle 401 gracefully
                 const runsRes = await fetch('/api/dashboard/recent-runs')
-                const runsData = await runsRes.json()
-
-                if (runsData.ok) {
-                    setRecentRuns(runsData.data)
+                if (runsRes.ok) {
+                    const runsData = await runsRes.json()
+                    if (runsData.ok) {
+                        setRecentRuns(runsData.data)
+                    }
                 }
             } catch (error) {
-                console.error('Failed to fetch dashboard data:', error)
-                toast({
-                    title: 'Error',
-                    description: 'Failed to load dashboard data',
-                    variant: 'destructive',
-                })
+                // Don't show error toast for auth issues
+                console.log('Dashboard data fetch issue')
             } finally {
                 setLoading(false)
             }
         }
 
         fetchInitialData()
-    }, [toast])
+    }, [isLoaded, isSignedIn])
 
     // Setup SSE connection
     useEffect(() => {
@@ -287,27 +296,18 @@ export default function DashboardPage() {
                     }
                 }
 
-                eventSource.onerror = (error) => {
-                    console.error('SSE error:', error)
+                eventSource.onerror = () => {
                     setIsConnected(false)
                     eventSource.close()
 
-                    // Attempt reconnection with exponential backoff
-                    if (reconnectAttempts < maxReconnectAttempts) {
+                    // Only attempt reconnection if signed in
+                    if (isSignedIn && reconnectAttempts < maxReconnectAttempts) {
                         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
                         reconnectAttempts++
-
-                        console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`)
 
                         reconnectTimeout = setTimeout(() => {
                             connectSSE()
                         }, delay)
-                    } else {
-                        toast({
-                            title: 'Connection Lost',
-                            description: 'Unable to establish real-time connection. Please refresh the page.',
-                            variant: 'destructive',
-                        })
                     }
                 }
             } catch (error) {

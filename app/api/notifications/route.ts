@@ -2,7 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 
-// In-memory storage for demo (replace with database in production)
+// In-memory storage for server-side notifications (replace with database in production)
+// This only stores notifications created via API, not demo/sample data
 const notificationsStore: Map<string, Notification[]> = new Map()
 
 interface Notification {
@@ -43,79 +44,14 @@ const formatDate = (date: Date): string => {
     return 'Earlier'
 }
 
-// Generate sample notifications for a user
-const generateSampleNotifications = (): Notification[] => {
-    const now = new Date()
-    return [
-        {
-            id: '1',
-            title: 'Workflow Completed',
-            message: 'Attendance reminder workflow sent to 45 parents via WhatsApp successfully.',
-            time: formatRelativeTime(new Date(now.getTime() - 5 * 60000)),
-            date: 'Today',
-            read: false,
-            type: 'success',
-            category: 'workflow',
-            createdAt: new Date(now.getTime() - 5 * 60000).toISOString(),
-        },
-        {
-            id: '2',
-            title: 'New Assignment Submissions',
-            message: '12 students submitted Math Quiz #3. Click to review submissions.',
-            time: formatRelativeTime(new Date(now.getTime() - 60 * 60000)),
-            date: 'Today',
-            read: false,
-            type: 'info',
-            category: 'assignment',
-            createdAt: new Date(now.getTime() - 60 * 60000).toISOString(),
-        },
-        {
-            id: '3',
-            title: 'WhatsApp API Warning',
-            message: 'You are approaching your daily message limit (450/500).',
-            time: formatRelativeTime(new Date(now.getTime() - 2 * 60 * 60000)),
-            date: 'Today',
-            read: false,
-            type: 'warning',
-            category: 'system',
-            createdAt: new Date(now.getTime() - 2 * 60 * 60000).toISOString(),
-        },
-        {
-            id: '4',
-            title: 'Attendance Marked',
-            message: 'Class 10-A attendance marked. 2 students absent.',
-            time: formatRelativeTime(new Date(now.getTime() - 3 * 60 * 60000)),
-            date: 'Today',
-            read: true,
-            type: 'info',
-            category: 'attendance',
-            createdAt: new Date(now.getTime() - 3 * 60 * 60000).toISOString(),
-        },
-        {
-            id: '5',
-            title: 'Parent Meeting Reminder',
-            message: 'Parent-teacher meeting scheduled for tomorrow at 4:00 PM.',
-            time: formatRelativeTime(new Date(now.getTime() - 4 * 60 * 60000)),
-            date: 'Today',
-            read: true,
-            type: 'info',
-            category: 'schedule',
-            createdAt: new Date(now.getTime() - 4 * 60 * 60000).toISOString(),
-        },
-    ]
-}
-
-// GET - Fetch notifications
+// GET - Fetch notifications (returns empty array by default, not sample data)
 export async function GET() {
     try {
         const user = await getCurrentUser()
         const userId = user?.id || 'anonymous'
 
-        // Get or create notifications for this user
-        if (!notificationsStore.has(userId)) {
-            notificationsStore.set(userId, generateSampleNotifications())
-        }
-
+        // Get notifications for this user (empty if none exist)
+        // No sample data is generated - client uses localStorage for persistence
         const notifications = notificationsStore.get(userId) || []
 
         return NextResponse.json({

@@ -2,7 +2,8 @@
 import { prisma } from '@/lib/db';
 import { WorkflowNode, NodeResult, NodeExecutionContext } from '@/lib/types';
 import { createNodeInstance } from './nodes';
-import { emitDashboardEvent } from '@/lib/realtime';
+import { emitDashboardEvent, emitNotification } from '@/lib/realtime';
+import { checkWorkflowIntegrations, getMissingIntegrationsSummary } from './integration-check';
 
 function isWorkflowNodeArray(v: any): v is WorkflowNode[] {
   return Array.isArray(v) && v.every(item =>
@@ -36,8 +37,33 @@ export class WorkflowExecutor {
       }
       const nodes = rawNodes as WorkflowNode[];
 
+      // Check integrations before execution
+      const integrationStatus = await checkWorkflowIntegrations(workflow.organizationId, nodes);
+      if (!integrationStatus.allConfigured) {
+        const missingNames = [...new Set(integrationStatus.missingIntegrations.map(m => m.integrationName))];
+
+        // Emit notification about missing integrations
+        emitNotification({
+          title: 'Missing Integrations',
+          message: `"${workflow.name}" requires: ${missingNames.join(', ')}. Some nodes may fail.`,
+          type: 'warning',
+          category: 'workflow',
+        });
+
+        // Emit event for UI to show missing integrations
+        emitDashboardEvent({
+          type: 'integration-missing',
+          data: {
+            workflowId,
+            workflowName: workflow.name,
+            missing: missingNames,
+          },
+        });
+      }
+
       const logs: NodeResult[] = [];
       let currentInput: Record<string, any> = payload || {};
+      const failedNodes: string[] = [];
 
       for (const node of nodes) {
         const nodeType = (node.data?.nodeType || node.type) as any;
@@ -62,6 +88,12 @@ export class WorkflowExecutor {
           services: { credentials },
         };
 
+        // Emit node running status
+        emitDashboardEvent({
+          type: 'node-status',
+          data: { runId, nodeId: node.id, status: 'running' },
+        });
+
         const startTime = Date.now();
         let result: any = null;
         let success = true;
@@ -69,15 +101,34 @@ export class WorkflowExecutor {
 
         try {
           result = await nodeInstance.execute(context);
+
+          // Check if result indicates partial failure (like alert-send with some channels failing)
+          if (result?.output?.successfulChannels !== undefined &&
+            result.output.successfulChannels < result.output.totalChannels) {
+            // Mark as warning - some channels failed
+            console.warn(`Node ${node.id} had partial success: ${result.output.successfulChannels}/${result.output.totalChannels} channels`);
+          }
         } catch (executionError) {
           success = false;
           errorMsg = executionError instanceof Error ? executionError.message : String(executionError);
           result = null;
           console.error(`Node ${node.id} (${nodeType}) execution failed:`, executionError);
           console.error('Node config:', node.data?.config);
+          failedNodes.push(node.id);
         }
 
         const duration = Date.now() - startTime;
+
+        // Emit node completion status
+        emitDashboardEvent({
+          type: 'node-status',
+          data: {
+            runId,
+            nodeId: node.id,
+            status: success ? 'success' : 'error',
+            error: errorMsg,
+          },
+        });
 
         const logEntry: NodeResult = {
           nodeId: node.id,
@@ -125,6 +176,14 @@ export class WorkflowExecutor {
         },
       });
 
+      // Send success notification
+      emitNotification({
+        title: 'Workflow Completed',
+        message: `"${workflow.name}" executed successfully in ${Math.round((finishedRun.finishedAt!.getTime() - finishedRun.startedAt.getTime()) / 1000)}s`,
+        type: 'success',
+        category: 'workflow',
+      });
+
       return runId;
     } catch (error) {
       try {
@@ -160,6 +219,14 @@ export class WorkflowExecutor {
               finishedAt: new Date().toISOString(),
               duration: 0,
             },
+          });
+
+          // Send failure notification
+          emitNotification({
+            title: 'Workflow Failed',
+            message: `"${workflow.name}" failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            type: 'error',
+            category: 'workflow',
           });
         }
       } catch (updateError) {

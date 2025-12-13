@@ -14,13 +14,14 @@ model Organization {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
-  users            User[]
-  workflows        Workflow[]
-  workflowRuns     WorkflowRun[]
-  integrations     IntegrationConnection[]
-  assignments      Assignment[]
-  attendance       Attendance[]
-  classSchedules   ClassSchedule[]
+  users              User[]
+  workflows          Workflow[]
+  workflowRuns       WorkflowRun[]
+  integrations       IntegrationConnection[]
+  assignments        Assignment[]
+  attendance         Attendance[]
+  classSchedules     ClassSchedule[]
+  scheduledWorkflows ScheduledWorkflow[]
   
   @@map("organizations")
 }
@@ -144,4 +145,23 @@ model ClassSchedule {
   
   @@index([organizationId, dayOfWeek])
   @@map("class_schedules")
+}
+
+model ScheduledWorkflow {
+  id            String    @id @default(cuid())
+  workflowId    String
+  scheduledAt   DateTime  // When it should execute
+  status        String    @default("PENDING") // PENDING, EXECUTED, CANCELLED, FAILED
+  payload       Json?     // Optional payload to pass when executing
+  executedAt    DateTime? // When it was actually executed
+  errorMessage  String?   // Error if execution failed
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  @@index([status, scheduledAt])
+  @@index([organizationId, scheduledAt(sort: Desc)])
+  @@map("scheduled_workflows")
 }

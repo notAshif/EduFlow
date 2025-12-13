@@ -23,7 +23,7 @@ export class AlertSendNode extends BaseNode {
 
             for (const channel of channelList) {
                 console.log(`[ALERT] Processing channel: ${channel}`);
-                
+
                 try {
                     switch (channel) {
                         case 'whatsapp':
@@ -86,7 +86,7 @@ export class AlertSendNode extends BaseNode {
     private async sendWhatsApp(recipients: string | string[], message: string) {
         console.log('[ALERT/WHATSAPP] Sending...');
         const recipientList = typeof recipients === 'string' ? recipients.split(',').map(r => r.trim()) : recipients;
-        
+
         const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
         const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
         const twilioWhatsAppFrom = process.env.TWILIO_WHATSAPP_FROM || process.env.TWILIO_PHONE_NUMBER || 'whatsapp:+14155238886';
@@ -97,18 +97,37 @@ export class AlertSendNode extends BaseNode {
                 channel: 'whatsapp',
                 success: true,
                 recipients: recipientList.length,
-                simulated: true
+                simulated: true,
+                note: 'Twilio credentials not set. Set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN in your .env file'
             };
         }
 
         const authHeader = 'Basic ' + Buffer.from(`${twilioAccountSid}:${twilioAuthToken}`).toString('base64');
         const formattedFrom = twilioWhatsAppFrom.startsWith('whatsapp:') ? twilioWhatsAppFrom : `whatsapp:${twilioWhatsAppFrom}`;
 
+        console.log('[ALERT/WHATSAPP] Using From:', formattedFrom);
+
         let successCount = 0;
+        const sendResults: any[] = [];
+
         for (const recipient of recipientList) {
             try {
-                const formattedTo = recipient.startsWith('whatsapp:') ? recipient : `whatsapp:${recipient}`;
-                
+                // Format recipient - must have whatsapp: prefix and valid international format
+                let formattedTo = recipient.trim();
+
+                // Remove any existing whatsapp: prefix to normalize
+                formattedTo = formattedTo.replace(/^whatsapp:/i, '');
+
+                // Ensure proper phone format with +
+                if (!formattedTo.startsWith('+')) {
+                    formattedTo = `+${formattedTo}`;
+                }
+
+                // Add whatsapp: prefix
+                formattedTo = `whatsapp:${formattedTo}`;
+
+                console.log(`[ALERT/WHATSAPP] Sending to: ${formattedTo}`);
+
                 const response = await fetch(
                     `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages.json`,
                     {
@@ -125,19 +144,47 @@ export class AlertSendNode extends BaseNode {
                     }
                 );
 
-                if (response.ok) successCount++;
+                const data = await response.json();
+
+                if (response.ok) {
+                    successCount++;
+                    sendResults.push({
+                        recipient: formattedTo,
+                        success: true,
+                        sid: data.sid,
+                        status: data.status
+                    });
+                    console.log(`[ALERT/WHATSAPP] ✓ Sent to ${formattedTo}, SID: ${data.sid}`);
+                } else {
+                    console.error(`[ALERT/WHATSAPP] ✗ Failed for ${formattedTo}:`, data);
+                    sendResults.push({
+                        recipient: formattedTo,
+                        success: false,
+                        error: data.message || data.error_message || 'Unknown Twilio error',
+                        code: data.code || data.error_code,
+                        moreInfo: data.more_info
+                    });
+                }
             } catch (error) {
-                console.error(`[ALERT/WHATSAPP] Failed for ${recipient}:`, error);
+                console.error(`[ALERT/WHATSAPP] ✗ Exception for ${recipient}:`, error);
+                sendResults.push({
+                    recipient,
+                    success: false,
+                    error: error instanceof Error ? error.message : 'Network error'
+                });
             }
         }
 
-        console.log(`[ALERT/WHATSAPP] ✓ Sent to ${successCount}/${recipientList.length}`);
+        console.log(`[ALERT/WHATSAPP] Complete: ${successCount}/${recipientList.length} sent`);
+
         return {
             channel: 'whatsapp',
             success: successCount > 0,
             recipients: recipientList.length,
             successfulSends: successCount,
-            simulated: false
+            simulated: false,
+            details: sendResults,
+            fromNumber: formattedFrom
         };
     }
 
@@ -219,7 +266,7 @@ export class AlertSendNode extends BaseNode {
         for (const recipient of recipientList) {
             try {
                 const formattedTo = recipient.startsWith('+') ? recipient : `+${recipient}`;
-                
+
                 const response = await fetch(
                     `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages.json`,
                     {
@@ -270,7 +317,7 @@ export class AlertSendNode extends BaseNode {
 
             const success = response.ok && await response.text() === 'ok';
             console.log(`[ALERT/SLACK] ${success ? '✓' : '✗'} ${success ? 'Success' : 'Failed'}`);
-            
+
             return { channel: 'slack', success, simulated: false };
         } catch (error) {
             console.error('[ALERT/SLACK] ✗ Failed:', error);
@@ -300,7 +347,7 @@ export class AlertSendNode extends BaseNode {
 
             const success = response.ok;
             console.log(`[ALERT/DISCORD] ${success ? '✓' : '✗'} ${success ? 'Success' : 'Failed'}`);
-            
+
             return { channel: 'discord', success, simulated: false };
         } catch (error) {
             console.error('[ALERT/DISCORD] ✗ Failed:', error);

@@ -3,10 +3,12 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
+import { useAuth } from '@clerk/nextjs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
 import {
   Plus,
@@ -22,7 +24,12 @@ import {
   XCircle,
   Activity,
   Wifi,
-  WifiOff
+  WifiOff,
+  Loader2,
+  LogIn,
+  Calendar,
+  AlarmClock,
+  X
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -47,20 +54,34 @@ interface Workflow {
 }
 
 export default function WorkflowsPage() {
+  const { isLoaded, isSignedIn } = useAuth()
   const [workflows, setWorkflows] = useState<Workflow[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [isConnected, setIsConnected] = useState(false)
+  const [authError, setAuthError] = useState(false)
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null)
+  const [scheduleDate, setScheduleDate] = useState('')
+  const [scheduleTime, setScheduleTime] = useState('')
+  const [isScheduling, setIsScheduling] = useState(false)
   const eventSourceRef = useRef<EventSource | null>(null)
   const { toast } = useToast()
 
   // Fetch workflows from API
   useEffect(() => {
-    fetchWorkflows()
-  }, [])
+    if (isLoaded && isSignedIn) {
+      fetchWorkflows()
+    } else if (isLoaded && !isSignedIn) {
+      setLoading(false)
+      setAuthError(true)
+    }
+  }, [isLoaded, isSignedIn])
 
-  // Setup SSE for real-time updates
+  // Setup SSE for real-time updates (only if signed in)
   useEffect(() => {
+    if (!isLoaded || !isSignedIn) return
+
     const connectSSE = () => {
       try {
         const eventSource = new EventSource('/api/dashboard/stream')
@@ -110,9 +131,9 @@ export default function WorkflowsPage() {
         }
 
         eventSource.onerror = () => {
-          console.error('SSE error')
           setIsConnected(false)
           eventSource.close()
+          // Don't log error for auth issues - handled by the API response
         }
       } catch (error) {
         console.error('Error creating EventSource:', error)
@@ -126,26 +147,34 @@ export default function WorkflowsPage() {
         eventSourceRef.current.close()
       }
     }
-  }, [toast])
+  }, [isLoaded, isSignedIn, toast])
 
   const fetchWorkflows = async () => {
     try {
       setLoading(true)
+      setAuthError(false)
       const response = await fetch('/api/workflows')
+
+      if (response.status === 401) {
+        setAuthError(true)
+        setWorkflows([])
+        return
+      }
+
       const data = await response.json()
 
       if (data.ok) {
         setWorkflows(data.data)
       } else {
-        throw new Error(data.error)
+        // Don't throw error for auth issues
+        if (data.error?.includes('Authentication')) {
+          setAuthError(true)
+        } else {
+          console.error('Failed to fetch workflows:', data.error)
+        }
       }
     } catch (error) {
       console.error('Failed to fetch workflows:', error)
-      toast({
-        title: 'Error',
-        description: 'Failed to load workflows',
-        variant: 'destructive',
-      })
     } finally {
       setLoading(false)
     }
@@ -158,6 +187,11 @@ export default function WorkflowsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       })
+
+      if (response.status === 401) {
+        setAuthError(true)
+        return
+      }
 
       const data = await response.json()
 
@@ -188,6 +222,11 @@ export default function WorkflowsPage() {
       const response = await fetch(`/api/workflows/${workflowId}`, {
         method: 'DELETE',
       })
+
+      if (response.status === 401) {
+        setAuthError(true)
+        return
+      }
 
       const data = await response.json()
 
@@ -223,9 +262,87 @@ export default function WorkflowsPage() {
     }
   }
 
+  const handleScheduleWorkflow = async () => {
+    if (!selectedWorkflow || !scheduleDate || !scheduleTime) {
+      toast({
+        title: 'Missing Information',
+        description: 'Please select both date and time',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setIsScheduling(true)
+
+    try {
+      // Combine date and time into ISO string
+      const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`).toISOString()
+
+      const response = await fetch(`/api/workflows/${selectedWorkflow.id}/schedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scheduledAt }),
+      })
+
+      const data = await response.json()
+
+      if (data.ok) {
+        toast({
+          title: 'Workflow Scheduled',
+          description: `"${selectedWorkflow.name}" will run on ${new Date(scheduledAt).toLocaleString()}`,
+        })
+        setShowScheduleModal(false)
+        setSelectedWorkflow(null)
+        setScheduleDate('')
+        setScheduleTime('')
+      } else {
+        throw new Error(data.error || 'Failed to schedule')
+      }
+    } catch (error) {
+      console.error('Failed to schedule workflow:', error)
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to schedule workflow',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsScheduling(false)
+    }
+  }
+
   const filteredWorkflows = workflows.filter(workflow =>
     workflow.name.toLowerCase().includes(searchQuery.toLowerCase())
   )
+
+  // Still loading auth state
+  if (!isLoaded) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  // Not signed in
+  if (!isSignedIn || authError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 space-y-4">
+        <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center">
+          <LogIn className="w-8 h-8 text-muted-foreground" />
+        </div>
+        <h2 className="text-xl font-semibold">Sign in to view workflows</h2>
+        <p className="text-muted-foreground text-center max-w-md">
+          Please sign in to access your workflows and create new automations.
+        </p>
+        <Link href="/sign-in">
+          <Button>
+            <LogIn className="w-4 h-4 mr-2" />
+            Sign In
+          </Button>
+        </Link>
+      </div>
+    )
+  }
 
   if (loading) {
     return (
@@ -240,8 +357,8 @@ export default function WorkflowsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Workflows</h1>
-          <p className="text-gray-600 mt-1">Manage and automate your educational workflows</p>
+          <h1 className="text-3xl font-bold">Workflows</h1>
+          <p className="text-muted-foreground mt-1">Manage and automate your educational workflows</p>
         </div>
         <div className="flex items-center gap-3">
           {/* Connection status */}
@@ -253,7 +370,7 @@ export default function WorkflowsPage() {
               </>
             ) : (
               <>
-                <WifiOff className="w-4 h-4 text-red-500" />
+                <WifiOff className="w-4 h-4 text-muted-foreground" />
                 <span className="text-muted-foreground">Offline</span>
               </>
             )}
@@ -270,7 +387,7 @@ export default function WorkflowsPage() {
       {/* Search and Filters */}
       <div className="flex items-center space-x-4">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
           <Input
             placeholder="Search workflows..."
             value={searchQuery}
@@ -312,6 +429,15 @@ export default function WorkflowsPage() {
                       <Copy className="w-4 h-4 mr-2" />
                       Duplicate
                     </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setSelectedWorkflow(workflow)
+                        setShowScheduleModal(true)
+                      }}
+                    >
+                      <Calendar className="w-4 h-4 mr-2" />
+                      Schedule
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       className="text-red-600"
@@ -327,7 +453,7 @@ export default function WorkflowsPage() {
                 <Badge variant={workflow.enabled ? 'default' : 'secondary'}>
                   {workflow.enabled ? 'Active' : 'Inactive'}
                 </Badge>
-                <span className="text-sm text-gray-500">
+                <span className="text-sm text-muted-foreground">
                   {workflow.runCount} runs
                 </span>
               </div>
@@ -335,7 +461,7 @@ export default function WorkflowsPage() {
             <CardContent className="space-y-4">
               {/* Last Run Status */}
               {workflow.lastRun && (
-                <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
+                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
                   <div className="flex items-center space-x-2">
                     {getStatusIcon(workflow.lastRun.status)}
                     <span className="text-sm font-medium">
@@ -343,7 +469,7 @@ export default function WorkflowsPage() {
                     </span>
                   </div>
                   {workflow.lastRun.duration !== null && (
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-muted-foreground">
                       {Math.round(workflow.lastRun.duration / 1000)}s
                     </span>
                   )}
@@ -369,7 +495,7 @@ export default function WorkflowsPage() {
               </div>
 
               {/* Metadata */}
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-muted-foreground">
                 Created {new Date(workflow.createdAt).toLocaleDateString()}
               </div>
             </CardContent>
@@ -381,13 +507,13 @@ export default function WorkflowsPage() {
       {filteredWorkflows.length === 0 && (
         <Card className="text-center py-12">
           <CardContent>
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Play className="w-8 h-8 text-gray-400" />
+            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+              <Play className="w-8 h-8 text-muted-foreground" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
+            <h3 className="text-lg font-medium mb-2">
               {searchQuery ? 'No workflows found' : 'No workflows yet'}
             </h3>
-            <p className="text-gray-600 mb-4">
+            <p className="text-muted-foreground mb-4">
               {searchQuery
                 ? 'Try adjusting your search terms'
                 : 'Create your first workflow to get started with automation'
@@ -403,6 +529,96 @@ export default function WorkflowsPage() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* Schedule Modal */}
+      {showScheduleModal && selectedWorkflow && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <AlarmClock className="w-5 h-5 text-primary" />
+                  Schedule Workflow
+                </CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Schedule &quot;{selectedWorkflow.name}&quot; to run automatically
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setShowScheduleModal(false)
+                  setSelectedWorkflow(null)
+                  setScheduleDate('')
+                  setScheduleTime('')
+                }}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="schedule-date">Date</Label>
+                <Input
+                  id="schedule-date"
+                  type="date"
+                  value={scheduleDate}
+                  onChange={(e) => setScheduleDate(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="w-full"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="schedule-time">Time</Label>
+                <Input
+                  id="schedule-time"
+                  type="time"
+                  value={scheduleTime}
+                  onChange={(e) => setScheduleTime(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+
+              {scheduleDate && scheduleTime && (
+                <div className="p-3 bg-muted rounded-lg">
+                  <p className="text-sm text-muted-foreground">Scheduled for:</p>
+                  <p className="text-lg font-semibold">
+                    {new Date(`${scheduleDate}T${scheduleTime}`).toLocaleString()}
+                  </p>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-4">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setShowScheduleModal(false)
+                    setSelectedWorkflow(null)
+                    setScheduleDate('')
+                    setScheduleTime('')
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={handleScheduleWorkflow}
+                  disabled={isScheduling || !scheduleDate || !scheduleTime}
+                >
+                  {isScheduling ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Calendar className="w-4 h-4 mr-2" />
+                  )}
+                  Schedule
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   )

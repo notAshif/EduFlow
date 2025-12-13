@@ -4,25 +4,48 @@ import { NodeExecutionContext } from '@/lib/types';
 
 export class SlackSendNode extends BaseNode {
   validate(config: any): void {
-    if (!config.webhookUrl) throw new Error('Slack webhook URL is required');
+    // Webhook URL can come from config OR from integration credentials
     if (!config.message) throw new Error('Message is required');
-    if (!config.webhookUrl.startsWith('https://hooks.slack.com/')) {
+
+    // Only validate webhook URL format if provided in config
+    if (config.webhookUrl && !config.webhookUrl.startsWith('https://hooks.slack.com/')) {
       throw new Error('Invalid Slack webhook URL format');
     }
   }
 
   async execute(context: NodeExecutionContext): Promise<any> {
     const {
-      webhookUrl,
       message,
       channel,
-      username = 'FlowX Bot',
+      username = 'EduFlow Bot',
       icon_emoji = ':robot_face:',
     } = this.config;
     const startTime = Date.now();
 
     console.log('[SLACK] Starting execution');
-    console.log('[SLACK] Webhook:', webhookUrl.substring(0, 50) + '...');
+
+    // Priority: config > credentials from integration
+    let webhookUrl = this.config.webhookUrl;
+
+    // If no webhook URL in config, try to get from integration credentials
+    if (!webhookUrl && context.services?.credentials) {
+      webhookUrl = context.services.credentials.webhookUrl;
+      console.log('[SLACK] Using webhook URL from integration credentials');
+    }
+
+    // Fallback to environment variable
+    if (!webhookUrl) {
+      webhookUrl = process.env.SLACK_WEBHOOK_URL;
+      if (webhookUrl) {
+        console.log('[SLACK] Using webhook URL from environment variable');
+      }
+    }
+
+    if (!webhookUrl) {
+      throw new Error('Slack webhook URL is required. Configure it in the node settings, integration page, or set SLACK_WEBHOOK_URL environment variable.');
+    }
+
+    console.log('[SLACK] Webhook: ...', webhookUrl.substring(webhookUrl.length - 20));
     console.log('[SLACK] Message:', message);
     console.log('[SLACK] Channel:', channel || 'default');
 

@@ -46,21 +46,26 @@ export default function NotificationsPage() {
         clearAllRead,
         fetchNotifications,
         unreadCount,
+        initialize,
     } = useNotificationStore()
 
     const unread = unreadCount()
 
-    // Fetch on mount and set up real-time polling
+    // Initialize from localStorage on mount and set up polling
     useEffect(() => {
+        // Initialize from localStorage first
+        initialize()
+
+        // Then try to fetch from API for any new server-side notifications
         fetchNotifications()
 
-        // Poll every 10 seconds for real-time updates
+        // Poll every 30 seconds for real-time updates (less frequent to reduce load)
         const interval = setInterval(() => {
             fetchNotifications()
-        }, 10000)
+        }, 30000)
 
         return () => clearInterval(interval)
-    }, [fetchNotifications])
+    }, [fetchNotifications, initialize])
 
     const handleRefresh = async () => {
         setIsRefreshing(true)

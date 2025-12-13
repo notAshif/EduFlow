@@ -13,7 +13,8 @@ import {
   UserCheck,
   Settings,
   Zap,
-  Upload
+  Upload,
+  LayoutTemplate
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -26,6 +27,7 @@ interface SidebarProps {
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Workflows', href: '/dashboard/workflows', icon: Workflow },
+  { name: 'Templates', href: '/dashboard/templates', icon: LayoutTemplate },
   { name: 'Integrations', href: '/dashboard/integration', icon: Plug },
   { name: 'Import Data', href: '/dashboard/import', icon: Upload },
   { name: 'Assignments', href: '/dashboard/assignments', icon: FileText },

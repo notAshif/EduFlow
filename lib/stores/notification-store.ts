@@ -17,6 +17,7 @@ interface NotificationStore {
     notifications: Notification[]
     isLoading: boolean
     lastFetch: Date | null
+    initialized: boolean
 
     // Actions
     setNotifications: (notifications: Notification[]) => void
@@ -26,6 +27,7 @@ interface NotificationStore {
     deleteNotification: (id: string) => void
     clearAllRead: () => void
     fetchNotifications: () => Promise<void>
+    initialize: () => void
 
     // Computed
     unreadCount: () => number
@@ -57,13 +59,59 @@ const formatDate = (date: Date): string => {
     return 'Earlier'
 }
 
+const STORAGE_KEY = 'eduflow_notifications'
+
+// Load notifications from localStorage
+const loadFromStorage = (): Notification[] => {
+    if (typeof window === 'undefined') return []
+    try {
+        const saved = localStorage.getItem(STORAGE_KEY)
+        if (saved) {
+            const parsed = JSON.parse(saved)
+            return parsed.map((n: any) => ({
+                ...n,
+                createdAt: new Date(n.createdAt),
+                time: formatRelativeTime(new Date(n.createdAt)),
+                date: formatDate(new Date(n.createdAt)),
+            }))
+        }
+    } catch (e) {
+        console.error('Error loading notifications from storage:', e)
+    }
+    return []
+}
+
+// Save notifications to localStorage
+const saveToStorage = (notifications: Notification[]) => {
+    if (typeof window === 'undefined') return
+    try {
+        const toSave = notifications.map(n => ({
+            ...n,
+            createdAt: n.createdAt.toISOString(),
+        }))
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave))
+    } catch (e) {
+        console.error('Error saving notifications to storage:', e)
+    }
+}
+
 export const useNotificationStore = create<NotificationStore>((set, get) => ({
-    // Start with empty notifications - no mock data
+    // Start with empty notifications - will load from localStorage
     notifications: [],
     isLoading: false,
     lastFetch: null,
+    initialized: false,
 
-    setNotifications: (notifications) => set({ notifications }),
+    initialize: () => {
+        if (get().initialized) return
+        const stored = loadFromStorage()
+        set({ notifications: stored, initialized: true })
+    },
+
+    setNotifications: (notifications) => {
+        set({ notifications })
+        saveToStorage(notifications)
+    },
 
     addNotification: (notification) => {
         const newNotification: Notification = {
@@ -73,60 +121,71 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
             time: 'Just now',
             date: 'Today',
         }
-        set((state) => ({
-            notifications: [newNotification, ...state.notifications],
-        }))
+        const updated = [newNotification, ...get().notifications]
+        set({ notifications: updated })
+        saveToStorage(updated)
     },
 
     markAsRead: (id) => {
-        set((state) => ({
-            notifications: state.notifications.map((n) =>
-                n.id === id ? { ...n, read: true } : n
-            ),
-        }))
+        const updated = get().notifications.map((n) =>
+            n.id === id ? { ...n, read: true } : n
+        )
+        set({ notifications: updated })
+        saveToStorage(updated)
     },
 
     markAllAsRead: () => {
-        set((state) => ({
-            notifications: state.notifications.map((n) => ({ ...n, read: true })),
-        }))
+        const updated = get().notifications.map((n) => ({ ...n, read: true }))
+        set({ notifications: updated })
+        saveToStorage(updated)
     },
 
     deleteNotification: (id) => {
-        set((state) => ({
-            notifications: state.notifications.filter((n) => n.id !== id),
-        }))
+        const updated = get().notifications.filter((n) => n.id !== id)
+        set({ notifications: updated })
+        saveToStorage(updated)
     },
 
     clearAllRead: () => {
-        set((state) => ({
-            notifications: state.notifications.filter((n) => !n.read),
-        }))
+        const updated = get().notifications.filter((n) => !n.read)
+        set({ notifications: updated })
+        saveToStorage(updated)
     },
 
     fetchNotifications: async () => {
+        // Initialize from localStorage first if not done
+        if (!get().initialized) {
+            get().initialize()
+        }
+
         set({ isLoading: true })
         try {
+            // Try to fetch from API for any new server-side notifications
             const response = await fetch('/api/notifications')
             if (response.ok) {
                 const data = await response.json()
-                if (data.notifications && Array.isArray(data.notifications)) {
-                    // Transform dates back to proper format
-                    const notifications = data.notifications.map((n: any) => ({
-                        ...n,
-                        createdAt: new Date(n.createdAt),
-                        time: formatRelativeTime(new Date(n.createdAt)),
-                        date: formatDate(new Date(n.createdAt)),
-                    }))
-                    set({
-                        notifications,
-                        lastFetch: new Date(),
-                    })
+                if (data.notifications && Array.isArray(data.notifications) && data.notifications.length > 0) {
+                    // Merge with existing notifications (avoid duplicates)
+                    const existingIds = new Set(get().notifications.map(n => n.id))
+                    const newNotifications = data.notifications
+                        .filter((n: any) => !existingIds.has(n.id))
+                        .map((n: any) => ({
+                            ...n,
+                            createdAt: new Date(n.createdAt),
+                            time: formatRelativeTime(new Date(n.createdAt)),
+                            date: formatDate(new Date(n.createdAt)),
+                        }))
+
+                    if (newNotifications.length > 0) {
+                        const merged = [...newNotifications, ...get().notifications]
+                        set({ notifications: merged, lastFetch: new Date() })
+                        saveToStorage(merged)
+                    }
                 }
             }
         } catch (error) {
-            // API might not exist yet - that's fine, keep empty array
-            console.log('Notifications API not available yet')
+            // API might not exist yet - use localStorage data
+            console.log('Using localStorage notifications')
         } finally {
             set({ isLoading: false })
         }

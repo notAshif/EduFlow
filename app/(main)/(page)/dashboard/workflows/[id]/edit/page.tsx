@@ -73,7 +73,8 @@ import {
     FileJson,
     Table,
     PieChart,
-    TrendingUp
+    TrendingUp,
+    Link2
 } from "lucide-react";
 import Link from "next/link";
 import { Textarea } from "@/components/ui/textarea";
@@ -89,7 +90,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 // --- Custom Node Component ---
+
+// Node status types for visualization
+type NodeStatus = 'idle' | 'running' | 'success' | 'error' | 'warning' | 'missing-integration';
+
 const CustomNode = ({ data, selected }: { data: any; selected: boolean }) => {
+    // Get status from data (set by workflow execution or integration check)
+    const status: NodeStatus = data.status || 'idle';
+    const hasIntegration = data.hasIntegration !== false;
+    const errorMessage = data.errorMessage;
+
     const getNodeIcon = (type: string) => {
         const iconMap: Record<string, any> = {
             // Communication
@@ -185,11 +195,64 @@ const CustomNode = ({ data, selected }: { data: any; selected: boolean }) => {
         return 'bg-primary';
     };
 
+    const getBorderClass = () => {
+        if (selected) return 'border-primary ring-2 ring-primary/20';
+        switch (status) {
+            case 'running': return 'border-blue-500 ring-2 ring-blue-500/20 animate-pulse';
+            case 'success': return 'border-green-500 ring-2 ring-green-500/20';
+            case 'error': return 'border-red-500 ring-2 ring-red-500/20';
+            case 'warning': return 'border-yellow-500 ring-2 ring-yellow-500/20';
+            case 'missing-integration': return 'border-orange-500 ring-2 ring-orange-500/20 border-dashed';
+            default: return 'border-border';
+        }
+    };
+
+    const getStatusIndicator = () => {
+        switch (status) {
+            case 'running':
+                return (
+                    <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center animate-spin">
+                        <div className="w-2 h-2 border-2 border-white border-t-transparent rounded-full" />
+                    </div>
+                );
+            case 'success':
+                return (
+                    <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
+                        <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                    </div>
+                );
+            case 'error':
+                return (
+                    <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 flex items-center justify-center" title={errorMessage}>
+                        <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </div>
+                );
+            case 'warning':
+                return (
+                    <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-yellow-500 flex items-center justify-center">
+                        <span className="text-white text-[10px] font-bold">!</span>
+                    </div>
+                );
+            case 'missing-integration':
+                return (
+                    <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-orange-500 flex items-center justify-center" title="Integration not configured">
+                        <Link2 className="w-2.5 h-2.5 text-white" />
+                    </div>
+                );
+            default:
+                return null;
+        }
+    };
+
     return (
         <div
-            className={`relative group min-w-[240px] rounded-xl bg-card border-2 transition-all duration-200 shadow-sm hover:shadow-md ${selected ? "border-primary ring-2 ring-primary/20" : "border-border"
-                }`}
+            className={`relative group min-w-[240px] rounded-xl bg-card border-2 transition-all duration-200 shadow-sm hover:shadow-md ${getBorderClass()}`}
         >
+            {getStatusIndicator()}
             <Handle
                 type="target"
                 position={Position.Left}
@@ -206,8 +269,18 @@ const CustomNode = ({ data, selected }: { data: any; selected: boolean }) => {
                     <div className="text-xs text-muted-foreground truncate">
                         {data.nodeType.replace(/-/g, ' ')}
                     </div>
+                    {status === 'error' && errorMessage && (
+                        <div className="text-xs text-red-500 truncate mt-0.5" title={errorMessage}>
+                            {errorMessage.slice(0, 30)}...
+                        </div>
+                    )}
+                    {!hasIntegration && (
+                        <div className="text-xs text-orange-500 truncate mt-0.5">
+                            ⚠️ Integration needed
+                        </div>
+                    )}
                 </div>
-                {data.config && Object.keys(data.config).length > 0 && (
+                {data.config && Object.keys(data.config).length > 0 && status === 'idle' && hasIntegration && (
                     <div className="w-2 h-2 rounded-full bg-green-500" title="Configured" />
                 )}
             </div>
@@ -226,7 +299,6 @@ const nodePalette = [
     {
         category: "Triggers",
         items: [
-            { type: "trigger-schedule", label: "Schedule Trigger", icon: Timer, description: "Run on schedule" },
             { type: "trigger-webhook", label: "Webhook Trigger", icon: Webhook, description: "HTTP webhook" },
             { type: "trigger-form", label: "Form Submission", icon: FormInput, description: "On form submit" },
             { type: "trigger-email", label: "Email Received", icon: Mail, description: "Incoming email" },
@@ -399,6 +471,7 @@ export default function EditWorkflowPage() {
                 case "microsoft-excel": return { workbookId: "", sheetName: "Sheet1", range: "A1:Z100", action: "read" };
                 // Communication
                 case "whatsapp-group": return {
+                    to: "", // REQUIRED: Comma-separated phone numbers with country code
                     groupLink: "",
                     groupName: "College Group",
                     message: "Hello everyone!",
@@ -579,7 +652,7 @@ export default function EditWorkflowPage() {
     }
 
     return (
-        <div className="h-screen flex flex-col bg-background">
+        <div className="-m-4 md:-m-6 lg:-m-8 h-[calc(100vh-4rem)] flex flex-col bg-background">
             {/* Header */}
             <div className="bg-background border-b border-border px-6 py-4 flex items-center justify-between z-10">
                 <div className="flex items-center gap-4">
@@ -773,19 +846,92 @@ function NodePropertiesPanel({
 
                 return (
                     <>
-                        {/* Group Link Section */}
-                        <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg mb-4">
-                            <div className="flex items-center gap-2 mb-2">
-                                <MessageCircle className="w-4 h-4 text-green-600" />
-                                <span className="text-sm font-medium text-green-700 dark:text-green-400">WhatsApp Group Message</span>
+                        {/* Mode Selection */}
+                        <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg mb-4 border border-green-200 dark:border-green-800">
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                    <MessageCircle className="w-5 h-5 text-green-600" />
+                                    <span className="font-medium text-green-700 dark:text-green-400">Send to WhatsApp Group</span>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={config.sendToGroup || false}
+                                        onChange={(e) => handleConfigChange("sendToGroup", e.target.checked)}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 dark:peer-focus:ring-green-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-green-600"></div>
+                                </label>
                             </div>
                             <p className="text-xs text-green-600 dark:text-green-500">
-                                Paste your WhatsApp group invite link or use phone number
+                                {config.sendToGroup
+                                    ? "✅ Will send to WhatsApp group using WhatsApp Web (requires connection)"
+                                    : "📱 Will send to individual phones using Twilio"
+                                }
                             </p>
                         </div>
 
+                        {config.sendToGroup ? (
+                            // Group Mode (WhatsApp Web)
+                            <>
+                                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 mb-4">
+                                    <p className="text-xs text-blue-600 dark:text-blue-400 mb-2">
+                                        <strong>📋 Setup Required:</strong> Go to Settings → Integrations → WhatsApp Web and scan the QR code to connect.
+                                    </p>
+                                </div>
+
+                                <div className="space-y-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                                    <Label htmlFor="groupName" className="text-green-700 dark:text-green-400 font-semibold">
+                                        📱 Group Name (REQUIRED)
+                                    </Label>
+                                    <Input
+                                        id="groupName"
+                                        placeholder="College Group, Class 12A Parents..."
+                                        value={config.groupName || ""}
+                                        onChange={(e) => handleConfigChange("groupName", e.target.value)}
+                                        className="border-green-300 dark:border-green-700"
+                                    />
+                                    <p className="text-xs text-green-600 dark:text-green-400">
+                                        Enter the exact name of your WhatsApp group (partial match works)
+                                    </p>
+                                </div>
+                            </>
+                        ) : (
+                            // Individual Mode (Twilio)
+                            <>
+                                <div className="space-y-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                    <Label htmlFor="to" className="text-blue-700 dark:text-blue-400 font-semibold">
+                                        📱 Recipients (Phone Numbers)
+                                    </Label>
+                                    <Input
+                                        id="to"
+                                        placeholder="+919876543210, +918765432109"
+                                        value={config.to || ""}
+                                        onChange={(e) => handleConfigChange("to", e.target.value)}
+                                        className="border-blue-300 dark:border-blue-700"
+                                    />
+                                    <p className="text-xs text-blue-600 dark:text-blue-400">
+                                        Comma-separated phone numbers with country code (e.g., +91 for India)
+                                    </p>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="groupName">Group Name (Label)</Label>
+                                    <Input
+                                        id="groupName"
+                                        placeholder="Class 12A Students"
+                                        value={config.groupName || ""}
+                                        onChange={(e) => handleConfigChange("groupName", e.target.value)}
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Optional label for organizing your contacts
+                                    </p>
+                                </div>
+                            </>
+                        )}
+
                         <div className="space-y-2">
-                            <Label htmlFor="groupLink">Group Invite Link (Optional)</Label>
+                            <Label htmlFor="groupLink">Group Invite Link (Reference)</Label>
                             <Input
                                 id="groupLink"
                                 placeholder="https://chat.whatsapp.com/ABC123xyz..."
@@ -793,18 +939,8 @@ function NodePropertiesPanel({
                                 onChange={(e) => handleConfigChange("groupLink", e.target.value)}
                             />
                             <p className="text-xs text-muted-foreground">
-                                Tip: Get this from WhatsApp Group → Group Info → Invite via link
+                                Save your group link for reference (not used for sending)
                             </p>
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="groupName">Group Name / Description</Label>
-                            <Input
-                                id="groupName"
-                                placeholder="FY BSc Computer Science 2024"
-                                value={config.groupName || ""}
-                                onChange={(e) => handleConfigChange("groupName", e.target.value)}
-                            />
                         </div>
 
                         <div className="space-y-2">

@@ -80,7 +80,8 @@ import {
   FileJson,
   Table,
   PieChart,
-  TrendingUp
+  TrendingUp,
+  RefreshCw
 } from "lucide-react";
 import Link from "next/link";
 import { Textarea } from "@/components/ui/textarea";
@@ -918,6 +919,32 @@ function NodePropertiesPanel({
     });
   };
 
+  const { toast } = useToast();
+  const [whatsappGroups, setWhatsappGroups] = useState<any[]>([]);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(false);
+
+  const fetchWhatsAppGroups = async () => {
+    setIsLoadingGroups(true);
+    try {
+      const res = await fetch('/api/whatsapp-web', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get-groups' })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setWhatsappGroups(data.groups);
+        toast({ description: `Fetched ${data.count} groups` });
+      } else {
+        toast({ description: "Failed to fetch groups", variant: "destructive" });
+      }
+    } catch (error) {
+      toast({ description: "Error fetching groups", variant: "destructive" });
+    } finally {
+      setIsLoadingGroups(false);
+    }
+  };
+
   const renderConfigFields = () => {
     switch (node.data.nodeType) {
       case "whatsapp-group":
@@ -981,15 +1008,40 @@ function NodePropertiesPanel({
                   <Label htmlFor="groupName" className="text-green-700 dark:text-green-400 font-semibold">
                     📱 Group Name (REQUIRED)
                   </Label>
-                  <Input
-                    id="groupName"
-                    placeholder="College Group, Class 12A Parents..."
-                    value={config.groupName || ""}
-                    onChange={(e) => handleConfigChange("groupName", e.target.value)}
-                    className="border-green-300 dark:border-green-700"
-                  />
+                  <div className="flex gap-2">
+                    <Select
+                      value={config.groupName || ""}
+                      onValueChange={(val) => handleConfigChange("groupName", val)}
+                    >
+                      <SelectTrigger className="flex-1 border-green-300 dark:border-green-700 bg-white dark:bg-black/20">
+                        <SelectValue placeholder="Select a group..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {whatsappGroups.length === 0 && (
+                          <div className="p-2 text-xs text-muted-foreground text-center">
+                            No groups loaded. Click refresh button.
+                          </div>
+                        )}
+                        {whatsappGroups.map((g: any) => (
+                          <SelectItem key={g.id} value={g.name}>
+                            {g.name} <span className="text-muted-foreground text-xs">({g.participants})</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={fetchWhatsAppGroups}
+                      disabled={isLoadingGroups}
+                      className="border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30"
+                      title="Fetch WhatsApp Groups"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${isLoadingGroups ? 'animate-spin' : ''}`} />
+                    </Button>
+                  </div>
                   <p className="text-xs text-green-600 dark:text-green-400">
-                    Enter the exact name of your WhatsApp group (partial match works)
+                    Select the group from the list. Make sure you are connected in Integrations.
                   </p>
                 </div>
               </>

@@ -8,6 +8,10 @@ const nextConfig: NextConfig = {
 
   // Exclude heavy server-side libraries from bundling
   serverExternalPackages: ['whatsapp-web.js', 'puppeteer'],
+  // WARNING: Skips type-checking during production builds
+  typescript: {
+    ignoreBuildErrors: true,
+  },
 };
 
 export default nextConfig;

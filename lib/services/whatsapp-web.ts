@@ -55,22 +55,42 @@ class WhatsAppWebService extends EventEmitter {
 
             console.log('[WHATSAPP-WEB] Initializing client...');
 
+            let puppeteerOpts: any = {
+                headless: true,
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--disable-gpu'
+                ]
+            };
+
+            // Use @sparticuz/chromium on Vercel (Production)
+            if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+                try {
+                    const chromium = (await import('@sparticuz/chromium-min')).default as any;
+                    puppeteerOpts = {
+                        args: chromium.args,
+                        defaultViewport: chromium.defaultViewport,
+                        executablePath: await chromium.executablePath(),
+                        headless: chromium.headless,
+                    };
+                    console.log('[WHATSAPP-WEB] Using @sparticuz/chromium for production');
+                } catch (err) {
+                    console.error('[WHATSAPP-WEB] Failed to load @sparticuz/chromium:', err);
+                }
+            }
+
             this.client = new Client({
                 authStrategy: new LocalAuth({
-                    dataPath: process.env.NODE_ENV === 'production' ? '/tmp/.wwebjs_auth' : './.wwebjs_auth'
+                    dataPath: (process.env.NODE_ENV === 'production' || process.env.VERCEL)
+                        ? '/tmp/.wwebjs_auth'
+                        : './.wwebjs_auth'
                 }),
-                puppeteer: {
-                    headless: true,
-                    args: [
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                        '--disable-dev-shm-usage',
-                        '--disable-accelerated-2d-canvas',
-                        '--no-first-run',
-                        '--no-zygote',
-                        '--disable-gpu'
-                    ]
-                }
+                puppeteer: puppeteerOpts
             });
 
             // QR Code event

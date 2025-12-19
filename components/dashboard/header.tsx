@@ -254,9 +254,9 @@ export function Header() {
                 <p className="text-xs text-muted-foreground">Quick access to documentation and support</p>
               </div>
               <div className="p-2">
-                {helpTopics.map((topic, index) => (
+                {helpTopics.map((topic) => (
                   <Link
-                    key={index}
+                    key={topic.title}
                     href={topic.href}
                     onClick={() => setShowHelp(false)}
                     className="flex items-center justify-between p-2 hover:bg-muted rounded-md transition-colors"

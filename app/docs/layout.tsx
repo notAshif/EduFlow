@@ -2,6 +2,8 @@ import { Navbar } from "@/app/components/Navbar";
 import { Footer } from "@/app/components/Footer";
 import { DocsSidebar } from "./Sidebar";
 
+export const dynamic = 'force-dynamic';
+
 export default function DocsLayout({
     children,
 }: {

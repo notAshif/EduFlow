@@ -160,8 +160,8 @@ export function PricingSection() {
                                     </Button>
 
                                     <ul className="space-y-3">
-                                        {tier.features.map((feature, idx) => (
-                                            <li key={idx} className="flex items-start gap-3">
+                                        {tier.features.map((feature) => (
+                                            <li key={feature} className="flex items-start gap-3">
                                                 <Check className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                                                 <span className="text-sm text-muted-foreground">{feature}</span>
                                             </li>

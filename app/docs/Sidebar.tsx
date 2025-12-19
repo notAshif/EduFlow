@@ -31,15 +31,15 @@ export function DocsSidebar() {
   return (
     <div className="w-64 border-r border-border/50 bg-card/30 backdrop-blur-xl h-[calc(100vh-4rem)] sticky top-20 hidden lg:block overflow-y-auto">
       <div className="p-6 space-y-8">
-        {sidebarItems.map((section, i) => (
-          <div key={i}>
+        {sidebarItems.map((section) => (
+          <div key={section.title}>
             <h4 className="font-semibold text-sm text-muted-foreground mb-4 uppercase tracking-wider">
               {section.title}
             </h4>
             <div className="space-y-2">
-              {section.items.map((item, j) => (
+              {section.items.map((item) => (
                 <Link
-                  key={j}
+                  key={item.title}
                   href={item.href}
                   className={cn(
                     "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",

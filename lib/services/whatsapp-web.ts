@@ -3,6 +3,8 @@
 
 import { EventEmitter } from 'events';
 import { prisma } from '@/lib/db';
+import os from 'os';
+import fs from 'fs';
 
 // We'll use dynamic imports to avoid issues with Next.js SSR
 let Client: any;
@@ -27,6 +29,7 @@ class WhatsAppWebService extends EventEmitter {
     private qrCode: string | null = null;
     private initPromise: Promise<void> | null = null;
     private organizationId: string | null = null;
+    private lastError: string | null = null;
 
     constructor() {
         super();
@@ -37,13 +40,28 @@ class WhatsAppWebService extends EventEmitter {
             this.organizationId = organizationId;
         }
 
-        // Prevent multiple initializations
-        if (this.initPromise) {
-            return this.initPromise;
+        // Prevent multiple initializations if already running or ready
+        if (this.initPromise || this.isReady) {
+            return;
         }
 
+        console.log('[WHATSAPP-WEB] Starting background initialization...');
+        this.lastError = null;
+        this.qrCode = null;
+
+        // Run in background and don't await the whole process
         this.initPromise = this._doInitialize();
-        return this.initPromise;
+
+        // Handle background completion/failure
+        this.initPromise.catch(error => {
+            console.error('[WHATSAPP-WEB] Background initialization failed:', error);
+            this.lastError = error instanceof Error ? error.message : 'Unknown error';
+            this.initPromise = null;
+            this.isReady = false;
+        });
+
+        // We return immediately to the caller (API) so it doesn't timeout
+        return;
     }
 
     private async _doInitialize(): Promise<void> {
@@ -53,7 +71,7 @@ class WhatsAppWebService extends EventEmitter {
             Client = wwebjs.Client;
             LocalAuth = wwebjs.LocalAuth;
 
-            console.log('[WHATSAPP-WEB] Initializing client...');
+            console.log('[WHATSAPP-WEB] Setting up browser options...');
 
             let puppeteerOpts: any = {
                 headless: true,
@@ -82,16 +100,47 @@ class WhatsAppWebService extends EventEmitter {
                 } catch (err) {
                     console.error('[WHATSAPP-WEB] Failed to load @sparticuz/chromium:', err);
                 }
-            } else if (process.env.NODE_ENV === 'production') {
+            } else if (process.env.NODE_ENV === 'production' && !process.env.LOCAL_PROD) {
                 // On Railway/Render, we expect Chromium to be installed in the environment
                 puppeteerOpts.executablePath = process.env.CHROME_PATH || '/usr/bin/google-chrome';
                 console.log('[WHATSAPP-WEB] Using system Chromium for production');
+            } else {
+                // Dev mode or Local Prod - Try to find local Chrome
+                const platform = os.platform();
+
+                if (platform === 'win32') {
+                    const paths = [
+                        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+                        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+                        'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+                        'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
+                    ];
+                    for (const path of paths) {
+                        if (fs.existsSync(path)) {
+                            puppeteerOpts.executablePath = path;
+                            console.log(`[WHATSAPP-WEB] Found local browser: ${path}`);
+                            break;
+                        }
+                    }
+                } else if (platform === 'darwin') {
+                    const paths = [
+                        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+                        '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge'
+                    ];
+                    for (const path of paths) {
+                        if (fs.existsSync(path)) {
+                            puppeteerOpts.executablePath = path;
+                            console.log(`[WHATSAPP-WEB] Found local browser: ${path}`);
+                            break;
+                        }
+                    }
+                }
             }
 
             this.client = new Client({
                 authStrategy: new LocalAuth({
                     dataPath: (process.env.NODE_ENV === 'production' || process.env.VERCEL)
-                        ? '/tmp/.wwebjs_auth'
+                        ? os.tmpdir() + '/.wwebjs_auth'
                         : './.wwebjs_auth'
                 }),
                 puppeteer: puppeteerOpts
@@ -212,11 +261,15 @@ class WhatsAppWebService extends EventEmitter {
     async getStatus(): Promise<{
         connected: boolean;
         qrCode: string | null;
+        error: string | null;
+        initializing: boolean;
         info: any;
     }> {
         return {
             connected: this.isReady,
             qrCode: this.qrCode,
+            error: this.lastError,
+            initializing: !!this.initPromise && !this.isReady,
             info: this.isReady && this.client ? await this.client.info : null
         };
     }

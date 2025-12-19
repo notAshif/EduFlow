@@ -15,12 +15,16 @@ export async function GET(request: NextRequest) {
             ok: true,
             connected: status.connected,
             qrCode: status.qrCode,
+            initializing: status.initializing,
+            error: status.error,
             info: status.info,
             message: status.connected
                 ? 'WhatsApp Web is connected'
                 : status.qrCode
                     ? 'Scan QR code to connect'
-                    : 'WhatsApp Web not initialized'
+                    : status.initializing
+                        ? 'Booting up WhatsApp Web...'
+                        : 'WhatsApp Web not initialized'
         });
     } catch (error) {
         console.error('[WHATSAPP-WEB API] Error:', error);

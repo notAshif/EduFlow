@@ -24,11 +24,15 @@ export default function WhatsAppWebPage() {
     const [status, setStatus] = useState<{
         connected: boolean;
         qrCode: string | null;
+        initializing: boolean;
+        error: string | null;
         info: any;
         loading: boolean;
     }>({
         connected: false,
         qrCode: null,
+        initializing: false,
+        error: null,
         info: null,
         loading: true
     });
@@ -44,6 +48,8 @@ export default function WhatsAppWebPage() {
             setStatus({
                 connected: data.connected,
                 qrCode: data.qrCode,
+                initializing: data.initializing,
+                error: data.error,
                 info: data.info,
                 loading: false
             });
@@ -72,6 +78,8 @@ export default function WhatsAppWebPage() {
                 setStatus({
                     connected: data.connected,
                     qrCode: data.qrCode,
+                    initializing: data.initializing || true,
+                    error: null,
                     info: null,
                     loading: false
                 });
@@ -214,46 +222,47 @@ export default function WhatsAppWebPage() {
                                 </div>
                             ) : status.qrCode ? (
                                 <div className="space-y-4">
-                                    <div className="flex flex-col items-center gap-4 p-6 bg-white dark:bg-gray-900 rounded-lg border-2 border-dashed">
-                                        <QrCode className="w-12 h-12 text-green-600" />
+                                    <div className="flex flex-col items-center gap-4 p-6 bg-white dark:bg-gray-900 rounded-lg border-2 border-dashed border-green-500/50 shadow-inner">
                                         <div className="text-center">
-                                            <p className="font-medium">Scan QR Code</p>
-                                            <p className="text-sm text-muted-foreground">
-                                                Open WhatsApp on your phone → Settings → Linked Devices → Link a Device
+                                            <p className="font-bold text-lg text-green-700 dark:text-green-400">Scan QR Code</p>
+                                            <p className="text-sm text-muted-foreground mb-4">
+                                                Open WhatsApp on your phone → Linked Devices → Link a Device
                                             </p>
                                         </div>
-                                        <div className="p-4 bg-white rounded-lg">
-                                            {/* QR Code would be displayed here */}
-                                            <div className="w-48 h-48 bg-muted flex items-center justify-center rounded text-xs text-center p-4">
-                                                QR Code displayed in server console.
-                                                Check your terminal for the QR code.
-                                            </div>
+                                        <div className="p-4 bg-white rounded-xl shadow-lg border-4 border-white">
+                                            {/* Generate QR code using a public API */}
+                                            <img
+                                                src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(status.qrCode)}`}
+                                                alt="WhatsApp QR Code"
+                                                className="w-48 h-48"
+                                            />
                                         </div>
-                                        <p className="text-xs text-muted-foreground">
-                                            Waiting for scan... (auto-refreshes every 3 seconds)
-                                        </p>
+                                        <div className="flex items-center gap-2 text-xs font-medium text-green-600 animate-pulse mt-2">
+                                            <RefreshCw className="w-3 h-3" />
+                                            <span>Waiting for scan... auto-refreshes</span>
+                                        </div>
                                     </div>
                                 </div>
                             ) : (
                                 <div className="space-y-4">
-                                    <div className="flex items-center gap-3 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
-                                        <XCircle className="w-8 h-8 text-amber-600" />
+                                    <div className={`flex items-center gap-3 p-4 rounded-lg ${status.error ? 'bg-red-50 dark:bg-red-900/20' : 'bg-amber-50 dark:bg-amber-900/20'}`}>
+                                        {status.error ? <XCircle className="w-8 h-8 text-red-600" /> : <XCircle className="w-8 h-8 text-amber-600" />}
                                         <div>
-                                            <p className="font-medium text-amber-700 dark:text-amber-400">
-                                                Not Connected
+                                            <p className={`font-medium ${status.error ? 'text-red-700 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}`}>
+                                                {status.error ? 'Connection Error' : 'Not Connected'}
                                             </p>
-                                            <p className="text-sm text-amber-600 dark:text-amber-500">
-                                                Click below to start the connection process
+                                            <p className={`text-sm ${status.error ? 'text-red-600 dark:text-red-500' : 'text-amber-600 dark:text-amber-500'}`}>
+                                                {status.error || (status.initializing ? 'Initializing session...' : 'Click below to start the connection process')}
                                             </p>
                                         </div>
                                     </div>
 
                                     <Button
                                         onClick={initializeWhatsApp}
-                                        disabled={isInitializing}
-                                        className="w-full bg-green-600 hover:bg-green-700"
+                                        disabled={isInitializing || status.initializing}
+                                        className="w-full bg-green-600 hover:bg-green-700 shadow-lg shadow-green-500/20"
                                     >
-                                        {isInitializing ? (
+                                        {isInitializing || status.initializing ? (
                                             <>
                                                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                                                 Starting WhatsApp Web...
@@ -261,14 +270,15 @@ export default function WhatsAppWebPage() {
                                         ) : (
                                             <>
                                                 <QrCode className="w-4 h-4 mr-2" />
-                                                Connect WhatsApp
+                                                {status.error ? 'Retry Connection' : 'Connect WhatsApp'}
                                             </>
                                         )}
                                     </Button>
-
-                                    <p className="text-xs text-muted-foreground text-center">
-                                        This will start a WhatsApp Web session. You'll need to scan a QR code with your phone.
-                                    </p>
+                                    {status.initializing && (
+                                        <p className="text-center text-xs text-muted-foreground animate-pulse">
+                                            Booting browser... this may take up to 20 seconds
+                                        </p>
+                                    )}
                                 </div>
                             )}
                         </CardContent>

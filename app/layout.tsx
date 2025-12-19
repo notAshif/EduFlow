@@ -7,9 +7,10 @@ import { Toaster } from "@/components/ui/toaster";
 
 const inter = Inter({ subsets: ['latin'] });
 
-const clerkPubKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-if (!clerkPubKey) {
-  throw new Error("Missing NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY environment variable");
+const clerkPubKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || "pk_test_c3F1YXJlLW1hY2F3LTQwLmNsZXJrLmFjY291bnRzLmRldiQ";
+
+if (!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.NODE_ENV === 'production' && typeof window !== 'undefined') {
+  console.warn("⚠️ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is missing! Authentication will fail on the client.");
 }
 
 export const metadata: Metadata = {

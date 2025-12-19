@@ -68,8 +68,8 @@ class WhatsAppWebService extends EventEmitter {
                 ]
             };
 
-            // Use @sparticuz/chromium on Vercel (Production)
-            if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+            // Use @sparticuz/chromium on Vercel, otherwise use standard puppeteer on production
+            if (process.env.VERCEL) {
                 try {
                     const chromium = (await import('@sparticuz/chromium-min')).default as any;
                     puppeteerOpts = {
@@ -78,10 +78,14 @@ class WhatsAppWebService extends EventEmitter {
                         executablePath: await chromium.executablePath(),
                         headless: chromium.headless,
                     };
-                    console.log('[WHATSAPP-WEB] Using @sparticuz/chromium for production');
+                    console.log('[WHATSAPP-WEB] Using @sparticuz/chromium for Vercel');
                 } catch (err) {
                     console.error('[WHATSAPP-WEB] Failed to load @sparticuz/chromium:', err);
                 }
+            } else if (process.env.NODE_ENV === 'production') {
+                // On Railway/Render, we expect Chromium to be installed in the environment
+                puppeteerOpts.executablePath = process.env.CHROME_PATH || '/usr/bin/google-chrome';
+                console.log('[WHATSAPP-WEB] Using system Chromium for production');
             }
 
             this.client = new Client({

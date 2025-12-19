@@ -87,7 +87,7 @@ export function FeatureBentoGrid() {
 
                 {/* Bento Grid Layout */}
                 <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4 auto-rows-fr">
-                    {bentoFeatures.map((feature, idx) => {
+                    {bentoFeatures.map((feature) => {
                         const sizeClasses = {
                             large: "md:col-span-2 lg:col-span-3 md:row-span-2",
                             medium: "md:col-span-2 lg:col-span-2",
@@ -96,7 +96,7 @@ export function FeatureBentoGrid() {
 
                         return (
                             <Link
-                                key={idx}
+                                key={feature.title}
                                 href={feature.href}
                                 className={`${sizeClasses[feature.size]} block group`}
                             >

@@ -37,7 +37,7 @@ class WorkflowScheduler {
 
     private async checkScheduledWorkflows() {
         try {
-            const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+            const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://127.0.0.1:3000';
 
             const response = await fetch(`${baseUrl}/api/cron/scheduled-workflows`, {
                 method: 'GET',

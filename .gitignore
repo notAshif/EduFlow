@@ -42,3 +42,5 @@ next-env.d.ts
 
 # whatsapp web session
 .wwebjs_auth/
+
+.vercel

@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
   // They are harmless and can be ignored.
 
   // Exclude heavy server-side libraries from bundling
-  serverExternalPackages: ['whatsapp-web.js', 'puppeteer'],
+  serverExternalPackages: ['whatsapp-web.js', 'puppeteer', 'puppeteer-core'],
   // WARNING: Skips type-checking during production builds
   typescript: {
     ignoreBuildErrors: true,

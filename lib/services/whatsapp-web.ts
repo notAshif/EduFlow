@@ -5,6 +5,7 @@ import { EventEmitter } from 'events';
 import { prisma } from '@/lib/db';
 import os from 'os';
 import fs from 'fs';
+import path from 'path';
 
 // We'll use dynamic imports to avoid issues with Next.js SSR
 let Client: any;
@@ -64,6 +65,67 @@ class WhatsAppWebService extends EventEmitter {
         return;
     }
 
+    private async findChromiumExecutable(): Promise<string | null> {
+        const platform = os.platform();
+
+        // Try to use puppeteer's bundled chromium first
+        try {
+            const puppeteer = await import('puppeteer');
+            const execPath = puppeteer.executablePath();
+            if (execPath && fs.existsSync(execPath)) {
+                console.log('[WHATSAPP-WEB] Found puppeteer bundled chromium:', execPath);
+                return execPath;
+            }
+        } catch (err) {
+            console.log('[WHATSAPP-WEB] Puppeteer not available, trying alternatives...');
+        }
+
+        // Platform-specific paths
+        const searchPaths: string[] = [];
+
+        if (platform === 'linux') {
+            searchPaths.push(
+                process.env.CHROME_PATH || '',
+                '/usr/bin/google-chrome-stable',
+                '/usr/bin/google-chrome',
+                '/usr/bin/chromium-browser',
+                '/usr/bin/chromium',
+                '/snap/bin/chromium',
+                '/usr/local/bin/chrome',
+                '/usr/local/bin/chromium'
+            );
+        } else if (platform === 'win32') {
+            const userHome = os.homedir();
+            const programFiles = process.env['PROGRAMFILES'] || 'C:\\Program Files';
+            const programFilesX86 = process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)';
+
+            searchPaths.push(
+                path.join(programFiles, 'Google\\Chrome\\Application\\chrome.exe'),
+                path.join(programFilesX86, 'Google\\Chrome\\Application\\chrome.exe'),
+                path.join(userHome, 'AppData\\Local\\Google\\Chrome\\Application\\chrome.exe'),
+                path.join(programFiles, 'Microsoft\\Edge\\Application\\msedge.exe'),
+                path.join(userHome, 'AppData\\Local\\Microsoft\\Edge\\Application\\msedge.exe')
+            );
+        } else if (platform === 'darwin') {
+            searchPaths.push(
+                '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+                '/Applications/Chromium.app/Contents/MacOS/Chromium',
+                '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+                path.join(os.homedir(), 'Applications/Google Chrome.app/Contents/MacOS/Google Chrome')
+            );
+        }
+
+        // Search for the first existing path
+        for (const execPath of searchPaths) {
+            if (execPath && fs.existsSync(execPath)) {
+                console.log(`[WHATSAPP-WEB] Found browser at: ${execPath}`);
+                return execPath;
+            }
+        }
+
+        return null;
+    }
+
     private async _doInitialize(): Promise<void> {
         try {
             // Dynamic import for whatsapp-web.js
@@ -82,29 +144,32 @@ class WhatsAppWebService extends EventEmitter {
                     '--disable-accelerated-2d-canvas',
                     '--no-first-run',
                     '--no-zygote',
-                    '--disable-gpu'
+                    '--disable-gpu',
+                    '--disable-web-security',
+                    '--disable-features=IsolateOrigins,site-per-process'
                 ]
             };
 
             // Detection for Vercel environment
             const isVercel = !!(process.env.VERCEL || process.env.NEXT_PUBLIC_VERCEL_URL);
+            let executablePath: string | null = null;
 
             if (isVercel) {
                 try {
                     console.log('[WHATSAPP-WEB] Vercel environment detected, loading chromium...');
                     const chromium = (await import('@sparticuz/chromium-min')).default as any;
-                    const path = await chromium.executablePath();
+                    executablePath = await chromium.executablePath();
 
-                    if (path) {
+                    if (executablePath) {
                         puppeteerOpts = {
                             args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
                             defaultViewport: chromium.defaultViewport,
-                            executablePath: path,
+                            executablePath: executablePath,
                             headless: chromium.headless,
                         };
-                        console.log('[WHATSAPP-WEB] ✓ Successfully loaded chromium for Vercel:', path);
+                        console.log('[WHATSAPP-WEB] ✓ Successfully loaded chromium for Vercel:', executablePath);
                     } else {
-                        console.warn('[WHATSAPP-WEB] ⚠️ Chromium path is empty. Falling back...');
+                        console.warn('[WHATSAPP-WEB] ⚠️ Chromium path is empty. Trying fallback...');
                     }
                 } catch (err) {
                     console.error('[WHATSAPP-WEB] ❌ Failed to load @sparticuz/chromium-min:', err);
@@ -112,64 +177,43 @@ class WhatsAppWebService extends EventEmitter {
             }
 
             // Fallback discovery if not on Vercel or if sparticuz failed
-            if (!puppeteerOpts.executablePath) {
-                const platform = os.platform();
+            if (!executablePath) {
+                executablePath = await this.findChromiumExecutable();
 
-                if (platform === 'linux') {
-                    // Try system paths for Railway/Render/VPS
-                    const linuxPaths = [
-                        process.env.CHROME_PATH,
-                        '/usr/bin/google-chrome',
-                        '/usr/bin/chromium-browser',
-                        '/usr/bin/chromium'
-                    ];
-                    for (const p of linuxPaths) {
-                        if (p && fs.existsSync(p)) {
-                            puppeteerOpts.executablePath = p;
-                            console.log(`[WHATSAPP-WEB] Found Linux browser: ${p}`);
-                            break;
-                        }
-                    }
-                } else if (platform === 'win32') {
-                    const userHome = os.homedir();
-                    const winPaths = [
-                        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-                        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-                        `${userHome}\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe`,
-                        'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-                        `${userHome}\\AppData\\Local\\Microsoft\\Edge\\Application\\msedge.exe`
-                    ];
-                    for (const p of winPaths) {
-                        if (fs.existsSync(p)) {
-                            puppeteerOpts.executablePath = p;
-                            console.log(`[WHATSAPP-WEB] Found Windows browser: ${p}`);
-                            break;
-                        }
-                    }
-                } else if (platform === 'darwin') {
-                    const macPaths = [
-                        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-                        '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge'
-                    ];
-                    for (const p of macPaths) {
-                        if (fs.existsSync(p)) {
-                            puppeteerOpts.executablePath = p;
-                            console.log(`[WHATSAPP-WEB] Found macOS browser: ${p}`);
-                            break;
-                        }
+                if (executablePath) {
+                    puppeteerOpts.executablePath = executablePath;
+                } else {
+                    // Last resort: try to install puppeteer on the fly
+                    console.warn('[WHATSAPP-WEB] ⚠️ No browser found. Attempting to use puppeteer with bundled chromium...');
+
+                    try {
+                        // Try to dynamically import puppeteer (not puppeteer-core)
+                        const puppeteer = await import('puppeteer');
+                        puppeteerOpts.executablePath = puppeteer.executablePath();
+                        console.log('[WHATSAPP-WEB] ✓ Using puppeteer bundled chromium');
+                    } catch (puppeteerErr) {
+                        console.error('[WHATSAPP-WEB] ❌ ERROR: Could not find any browser executable.');
+                        console.error('[WHATSAPP-WEB] Please install Chrome/Chromium or run: npm install puppeteer');
+                        throw new Error(
+                            'No browser executable found. Please install Chrome/Chromium or add "puppeteer" to your dependencies.'
+                        );
                     }
                 }
             }
 
-            // Final sanity check
-            if (!puppeteerOpts.executablePath && !process.env.VERCEL) {
-                console.error('[WHATSAPP-WEB] ❌ ERROR: No executablePath found. Connection WILL fail.');
+            // Final validation and channel fallback
+            // Since we are overriding puppeteer with puppeteer-core, we MUST specify a path or channel
+            if (!puppeteerOpts.executablePath) {
+                console.log('[WHATSAPP-WEB] No specific executable path found, using "chrome" channel fallback...');
+                puppeteerOpts.channel = 'chrome';
             }
+
+            console.log('[WHATSAPP-WEB] Initializing WhatsApp with browser:', puppeteerOpts.executablePath || 'Chrome Channel');
 
             this.client = new Client({
                 authStrategy: new LocalAuth({
                     dataPath: (process.env.NODE_ENV === 'production' || process.env.VERCEL)
-                        ? os.tmpdir() + '/.wwebjs_auth'
+                        ? path.join(os.tmpdir(), '.wwebjs_auth')
                         : './.wwebjs_auth'
                 }),
                 puppeteer: puppeteerOpts
@@ -413,4 +457,4 @@ export function getWhatsAppWebService(): WhatsAppWebService {
 }
 
 export { WhatsAppWebService };
-export type { WhatsAppMessage, SendResult };
+export type { WhatsAppMessage, SendResult }

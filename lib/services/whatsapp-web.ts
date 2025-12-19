@@ -105,52 +105,8 @@ class WhatsAppWebService extends EventEmitter {
                 puppeteerOpts.executablePath = process.env.CHROME_PATH || '/usr/bin/google-chrome';
                 console.log('[WHATSAPP-WEB] Using system Chromium for Linux production');
             } else {
-                // Dev mode or Local Windows/Mac Prod - Search extensively for local browsers
-                const platform = os.platform();
-                const userHome = os.homedir();
-
-                if (platform === 'win32') {
-                    const paths = [
-                        // System-wide Chrome
-                        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-                        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-                        // User-level Chrome
-                        `${userHome}\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe`,
-                        // System-wide Edge
-                        'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-                        'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-                        // User-level Edge
-                        `${userHome}\\AppData\\Local\\Microsoft\\Edge\\Application\\msedge.exe`,
-                        // Brave
-                        'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
-                        `${userHome}\\AppData\\Local\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`,
-                    ];
-
-                    for (const path of paths) {
-                        if (fs.existsSync(path)) {
-                            puppeteerOpts.executablePath = path;
-                            console.log(`[WHATSAPP-WEB] Found local browser: ${path}`);
-                            break;
-                        }
-                    }
-                } else if (platform === 'darwin') {
-                    const paths = [
-                        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-                        '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
-                        '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'
-                    ];
-                    for (const path of paths) {
-                        if (fs.existsSync(path)) {
-                            puppeteerOpts.executablePath = path;
-                            console.log(`[WHATSAPP-WEB] Found local browser: ${path}`);
-                            break;
-                        }
-                    }
-                }
-
-                if (!puppeteerOpts.executablePath && !process.env.VERCEL) {
-                    console.warn('[WHATSAPP-WEB] WARNING: No compatible browser found automatically. Puppeteer may fail.');
-                }
+                // Dev mode or Local Windows/Mac - Now using full Puppeteer's bundled Chromium
+                console.log('[WHATSAPP-WEB] Using bundled Chromium (standard puppeteer)');
             }
 
             this.client = new Client({

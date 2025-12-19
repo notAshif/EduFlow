@@ -86,7 +86,7 @@ class WhatsAppWebService extends EventEmitter {
                 ]
             };
 
-            // Use @sparticuz/chromium on Vercel, otherwise use standard puppeteer on production
+            // Use @sparticuz/chromium on Vercel
             if (process.env.VERCEL) {
                 try {
                     const chromium = (await import('@sparticuz/chromium-min')).default as any;
@@ -100,21 +100,32 @@ class WhatsAppWebService extends EventEmitter {
                 } catch (err) {
                     console.error('[WHATSAPP-WEB] Failed to load @sparticuz/chromium:', err);
                 }
-            } else if (process.env.NODE_ENV === 'production' && !process.env.LOCAL_PROD) {
-                // On Railway/Render, we expect Chromium to be installed in the environment
+            } else if (os.platform() === 'linux' && process.env.NODE_ENV === 'production' && !process.env.LOCAL_PROD) {
+                // On Railway/Render (Linux), we expect Chromium to be installed in the environment
                 puppeteerOpts.executablePath = process.env.CHROME_PATH || '/usr/bin/google-chrome';
-                console.log('[WHATSAPP-WEB] Using system Chromium for production');
+                console.log('[WHATSAPP-WEB] Using system Chromium for Linux production');
             } else {
-                // Dev mode or Local Prod - Try to find local Chrome
+                // Dev mode or Local Windows/Mac Prod - Search extensively for local browsers
                 const platform = os.platform();
+                const userHome = os.homedir();
 
                 if (platform === 'win32') {
                     const paths = [
+                        // System-wide Chrome
                         'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
                         'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+                        // User-level Chrome
+                        `${userHome}\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe`,
+                        // System-wide Edge
                         'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-                        'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
+                        'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+                        // User-level Edge
+                        `${userHome}\\AppData\\Local\\Microsoft\\Edge\\Application\\msedge.exe`,
+                        // Brave
+                        'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
+                        `${userHome}\\AppData\\Local\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`,
                     ];
+
                     for (const path of paths) {
                         if (fs.existsSync(path)) {
                             puppeteerOpts.executablePath = path;
@@ -125,7 +136,8 @@ class WhatsAppWebService extends EventEmitter {
                 } else if (platform === 'darwin') {
                     const paths = [
                         '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-                        '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge'
+                        '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+                        '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'
                     ];
                     for (const path of paths) {
                         if (fs.existsSync(path)) {
@@ -134,6 +146,10 @@ class WhatsAppWebService extends EventEmitter {
                             break;
                         }
                     }
+                }
+
+                if (!puppeteerOpts.executablePath && !process.env.VERCEL) {
+                    console.warn('[WHATSAPP-WEB] WARNING: No compatible browser found automatically. Puppeteer may fail.');
                 }
             }
 

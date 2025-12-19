@@ -57,7 +57,7 @@ class WhatsAppWebService extends EventEmitter {
 
             this.client = new Client({
                 authStrategy: new LocalAuth({
-                    dataPath: './.wwebjs_auth'
+                    dataPath: process.env.NODE_ENV === 'production' ? '/tmp/.wwebjs_auth' : './.wwebjs_auth'
                 }),
                 puppeteer: {
                     headless: true,

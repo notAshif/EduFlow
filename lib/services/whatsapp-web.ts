@@ -165,9 +165,7 @@ class WhatsAppWebService extends EventEmitter {
                     '--disable-web-security',
                     '--disable-features=IsolateOrigins,site-per-process',
                     '--disable-extensions',
-                    '--disable-component-update',
-                    '--single-process',
-                    '--remote-debugging-port=9222'
+                    '--disable-component-update'
                 ]
             };
 
@@ -249,7 +247,7 @@ class WhatsAppWebService extends EventEmitter {
                 qrMaxRetries: 10,
                 webVersionCache: {
                     type: 'remote',
-                    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1018617511-alpha.html'
+                    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
                 }
             });
 

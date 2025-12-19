@@ -70,7 +70,7 @@ class WhatsAppWebService extends EventEmitter {
 
         // Try to use puppeteer's bundled chromium first
         try {
-            const puppeteer = await import('puppeteer');
+            const puppeteer = await import('puppeteer-core');
             const execPath = puppeteer.executablePath();
             if (execPath && fs.existsSync(execPath)) {
                 console.log('[WHATSAPP-WEB] Found puppeteer bundled chromium:', execPath);
@@ -156,20 +156,23 @@ class WhatsAppWebService extends EventEmitter {
 
             if (isVercel) {
                 try {
-                    console.log('[WHATSAPP-WEB] Vercel environment detected, loading chromium...');
+                    console.log('[WHATSAPP-WEB] Vercel environment detected, loading optimized chromium...');
                     const chromium = (await import('@sparticuz/chromium-min')).default as any;
-                    executablePath = await chromium.executablePath();
+
+                    // Note: @sparticuz/chromium-min requires a pack URL. 
+                    // We'll try the default, but this is why it might have failed.
+                    executablePath = await chromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar');
 
                     if (executablePath) {
                         puppeteerOpts = {
-                            args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
+                            args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox', '--single-process'],
                             defaultViewport: chromium.defaultViewport,
                             executablePath: executablePath,
                             headless: chromium.headless,
                         };
                         console.log('[WHATSAPP-WEB] ✓ Successfully loaded chromium for Vercel:', executablePath);
                     } else {
-                        console.warn('[WHATSAPP-WEB] ⚠️ Chromium path is empty. Trying fallback...');
+                        console.warn('[WHATSAPP-WEB] ⚠️ Chromium path is empty. Vercel deployment may fail.');
                     }
                 } catch (err) {
                     console.error('[WHATSAPP-WEB] ❌ Failed to load @sparticuz/chromium-min:', err);
@@ -188,7 +191,7 @@ class WhatsAppWebService extends EventEmitter {
 
                     try {
                         // Try to dynamically import puppeteer (not puppeteer-core)
-                        const puppeteer = await import('puppeteer');
+                        const puppeteer = await import('puppeteer-core');
                         puppeteerOpts.executablePath = puppeteer.executablePath();
                         console.log('[WHATSAPP-WEB] ✓ Using puppeteer bundled chromium');
                     } catch (puppeteerErr) {

@@ -86,75 +86,84 @@ class WhatsAppWebService extends EventEmitter {
                 ]
             };
 
-            // Use @sparticuz/chromium on Vercel
-            if (process.env.VERCEL) {
-                try {
-                    const chromium = (await import('@sparticuz/chromium-min')).default as any;
-                    puppeteerOpts = {
-                        args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
-                        defaultViewport: chromium.defaultViewport,
-                        executablePath: await chromium.executablePath(),
-                        headless: chromium.headless || true,
-                    };
-                    console.log('[WHATSAPP-WEB] Using @sparticuz/chromium for Vercel');
-                } catch (err) {
-                    console.error('[WHATSAPP-WEB] Failed to load @sparticuz/chromium:', err);
-                }
-            } else if (os.platform() === 'linux' && process.env.NODE_ENV === 'production' && !process.env.LOCAL_PROD) {
-                // On Railway/Render (Linux), we expect Chromium to be installed in the environment
-                puppeteerOpts.executablePath = process.env.CHROME_PATH || '/usr/bin/google-chrome';
-                console.log('[WHATSAPP-WEB] Using system Chromium for Linux production');
-            } else {
-                // Dev mode or Local Windows/Mac - Search for any Chromium browser
-                const platform = os.platform();
-                const userHome = os.homedir();
+            // Detection for Vercel environment
+            const isVercel = !!(process.env.VERCEL || process.env.NEXT_PUBLIC_VERCEL_URL);
 
-                if (platform === 'win32') {
-                    const paths = [
-                        // System-wide Chrome
+            if (isVercel) {
+                try {
+                    console.log('[WHATSAPP-WEB] Vercel environment detected, loading chromium...');
+                    const chromium = (await import('@sparticuz/chromium-min')).default as any;
+                    const path = await chromium.executablePath();
+
+                    if (path) {
+                        puppeteerOpts = {
+                            args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
+                            defaultViewport: chromium.defaultViewport,
+                            executablePath: path,
+                            headless: chromium.headless,
+                        };
+                        console.log('[WHATSAPP-WEB] ✓ Successfully loaded chromium for Vercel:', path);
+                    } else {
+                        console.warn('[WHATSAPP-WEB] ⚠️ Chromium path is empty. Falling back...');
+                    }
+                } catch (err) {
+                    console.error('[WHATSAPP-WEB] ❌ Failed to load @sparticuz/chromium-min:', err);
+                }
+            }
+
+            // Fallback discovery if not on Vercel or if sparticuz failed
+            if (!puppeteerOpts.executablePath) {
+                const platform = os.platform();
+
+                if (platform === 'linux') {
+                    // Try system paths for Railway/Render/VPS
+                    const linuxPaths = [
+                        process.env.CHROME_PATH,
+                        '/usr/bin/google-chrome',
+                        '/usr/bin/chromium-browser',
+                        '/usr/bin/chromium'
+                    ];
+                    for (const p of linuxPaths) {
+                        if (p && fs.existsSync(p)) {
+                            puppeteerOpts.executablePath = p;
+                            console.log(`[WHATSAPP-WEB] Found Linux browser: ${p}`);
+                            break;
+                        }
+                    }
+                } else if (platform === 'win32') {
+                    const userHome = os.homedir();
+                    const winPaths = [
                         'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
                         'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-                        // User-level Chrome
                         `${userHome}\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe`,
-                        // System-wide Edge
                         'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-                        'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-                        // User-level Edge
-                        `${userHome}\\AppData\\Local\\Microsoft\\Edge\\Application\\msedge.exe`,
-                        // Brave
-                        'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
-                        `${userHome}\\AppData\\Local\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`,
+                        `${userHome}\\AppData\\Local\\Microsoft\\Edge\\Application\\msedge.exe`
                     ];
-
-                    for (const path of paths) {
-                        try {
-                            if (fs.existsSync(path)) {
-                                puppeteerOpts.executablePath = path;
-                                console.log(`[WHATSAPP-WEB] Found local browser: ${path}`);
-                                break;
-                            }
-                        } catch (e) { }
+                    for (const p of winPaths) {
+                        if (fs.existsSync(p)) {
+                            puppeteerOpts.executablePath = p;
+                            console.log(`[WHATSAPP-WEB] Found Windows browser: ${p}`);
+                            break;
+                        }
                     }
                 } else if (platform === 'darwin') {
-                    const paths = [
+                    const macPaths = [
                         '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-                        '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
-                        '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'
+                        '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge'
                     ];
-                    for (const path of paths) {
-                        try {
-                            if (fs.existsSync(path)) {
-                                puppeteerOpts.executablePath = path;
-                                console.log(`[WHATSAPP-WEB] Found local browser: ${path}`);
-                                break;
-                            }
-                        } catch (e) { }
+                    for (const p of macPaths) {
+                        if (fs.existsSync(p)) {
+                            puppeteerOpts.executablePath = p;
+                            console.log(`[WHATSAPP-WEB] Found macOS browser: ${p}`);
+                            break;
+                        }
                     }
                 }
+            }
 
-                if (!puppeteerOpts.executablePath) {
-                    console.error('[WHATSAPP-WEB] ERROR: No browser found. WhatsApp Web will fail to launch.');
-                }
+            // Final sanity check
+            if (!puppeteerOpts.executablePath && !process.env.VERCEL) {
+                console.error('[WHATSAPP-WEB] ❌ ERROR: No executablePath found. Connection WILL fail.');
             }
 
             this.client = new Client({

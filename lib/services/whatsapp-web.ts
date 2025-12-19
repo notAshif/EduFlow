@@ -128,12 +128,29 @@ class WhatsAppWebService extends EventEmitter {
 
     private async _doInitialize(): Promise<void> {
         try {
+            console.log('[WHATSAPP-WEB] Loading whatsapp-web.js modules...');
             // Dynamic import for whatsapp-web.js
             const wwebjs = await import('whatsapp-web.js');
             Client = wwebjs.Client;
             LocalAuth = wwebjs.LocalAuth;
 
             console.log('[WHATSAPP-WEB] Setting up browser options...');
+
+            // Clear potential session locks (common issue on Windows/Vercel)
+            // This prevents the "browser already open" error that hangs WhatsApp initialization
+            const authPath = (process.env.NODE_ENV === 'production' || process.env.VERCEL)
+                ? path.join(os.tmpdir(), '.wwebjs_auth')
+                : path.join(process.cwd(), '.wwebjs_auth');
+
+            try {
+                const lockPath = path.join(authPath, 'SingletonLock');
+                if (fs.existsSync(lockPath)) {
+                    console.log('[WHATSAPP-WEB] Removing stale session lock...');
+                    fs.unlinkSync(lockPath);
+                }
+            } catch (e) {
+                // Ignore errors if no lock exists
+            }
 
             let puppeteerOpts: any = {
                 headless: true,
@@ -146,7 +163,11 @@ class WhatsAppWebService extends EventEmitter {
                     '--no-zygote',
                     '--disable-gpu',
                     '--disable-web-security',
-                    '--disable-features=IsolateOrigins,site-per-process'
+                    '--disable-features=IsolateOrigins,site-per-process',
+                    '--disable-extensions',
+                    '--disable-component-update',
+                    '--single-process',
+                    '--remote-debugging-port=9222'
                 ]
             };
 
@@ -176,6 +197,7 @@ class WhatsAppWebService extends EventEmitter {
                     }
                 } catch (err) {
                     console.error('[WHATSAPP-WEB] ❌ Failed to load @sparticuz/chromium-min:', err);
+                    this.lastError = `Chromium load failed: ${err instanceof Error ? err.message : String(err)}`;
                 }
             }
 
@@ -205,21 +227,30 @@ class WhatsAppWebService extends EventEmitter {
             }
 
             // Final validation and channel fallback
-            // Since we are overriding puppeteer with puppeteer-core, we MUST specify a path or channel
             if (!puppeteerOpts.executablePath) {
                 console.log('[WHATSAPP-WEB] No specific executable path found, using "chrome" channel fallback...');
                 puppeteerOpts.channel = 'chrome';
             }
 
-            console.log('[WHATSAPP-WEB] Initializing WhatsApp with browser:', puppeteerOpts.executablePath || 'Chrome Channel');
+            console.log('[WHATSAPP-WEB] Launching browser with options...', {
+                executablePath: puppeteerOpts.executablePath,
+                channel: puppeteerOpts.channel,
+                headless: puppeteerOpts.headless
+            });
 
             this.client = new Client({
                 authStrategy: new LocalAuth({
                     dataPath: (process.env.NODE_ENV === 'production' || process.env.VERCEL)
                         ? path.join(os.tmpdir(), '.wwebjs_auth')
-                        : './.wwebjs_auth'
+                        : path.join(process.cwd(), '.wwebjs_auth')
                 }),
-                puppeteer: puppeteerOpts
+                puppeteer: puppeteerOpts,
+                authTimeoutMs: 120000, // 2 minutes timeout for auth
+                qrMaxRetries: 10,
+                webVersionCache: {
+                    type: 'remote',
+                    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1018617511-alpha.html'
+                }
             });
 
             // QR Code event

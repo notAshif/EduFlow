@@ -75,7 +75,8 @@ import {
     PieChart,
     TrendingUp,
     Link2,
-    RefreshCw
+    RefreshCw,
+    FileSpreadsheet
 } from "lucide-react";
 import Link from "next/link";
 import { Textarea } from "@/components/ui/textarea";
@@ -826,6 +827,199 @@ function NodePropertiesPanel({
     const [whatsappGroups, setWhatsappGroups] = useState<any[]>([]);
     const [isLoadingGroups, setIsLoadingGroups] = useState(false);
 
+    // Google Sheets specific states
+    const [sheetNames, setSheetNames] = useState<string[]>([]);
+    const [isFetchingSheets, setIsFetchingSheets] = useState(false);
+    const [spreadsheetName, setSpreadsheetName] = useState<string | null>(null);
+    const [sheetError, setSheetError] = useState<string | null>(null);
+    const [recentSheets, setRecentSheets] = useState<any[]>([]);
+    const [isFetchingRecentSheets, setIsFetchingRecentSheets] = useState(false);
+
+    // Google Classroom specific states
+    const [courses, setCourses] = useState<any[]>([]);
+    const [isFetchingCourses, setIsFetchingCourses] = useState(false);
+    const [classroomError, setClassroomError] = useState<string | null>(null);
+
+    // Google Drive specific states
+    const [recentDriveFiles, setRecentDriveFiles] = useState<any[]>([]);
+    const [isFetchingDriveFiles, setIsFetchingDriveFiles] = useState(false);
+
+    // Google Calendar specific states
+    const [recentCalendars, setRecentCalendars] = useState<any[]>([]);
+    const [isFetchingCalendars, setIsFetchingCalendars] = useState(false);
+    const [recentEvents, setRecentEvents] = useState<any[]>([]);
+    const [isFetchingEvents, setIsFetchingEvents] = useState(false);
+
+    // Google Forms specific states
+    const [recentForms, setRecentForms] = useState<any[]>([]);
+    const [isFetchingForms, setIsFetchingForms] = useState(false);
+
+    const fetchClassroomMetadata = useCallback(async () => {
+        setIsFetchingCourses(true);
+        setClassroomError(null);
+        try {
+            const res = await fetch('/api/integrations/google/classroom/metadata');
+            const data = await res.json();
+            if (data.courses) {
+                setCourses(data.courses);
+            } else if (data.error) {
+                setClassroomError(data.error);
+            }
+        } catch (error) {
+            console.error("Failed to fetch classroom metadata:", error);
+            setClassroomError("Connection failed");
+        } finally {
+            setIsFetchingCourses(false);
+        }
+    }, []);
+
+    const fetchRecentSheets = useCallback(async () => {
+        setIsFetchingRecentSheets(true);
+        try {
+            const res = await fetch('/api/integrations/google/sheets/list');
+            const data = await res.json();
+            if (data.files) {
+                setRecentSheets(data.files);
+            }
+        } catch (error) {
+            console.error("Failed to fetch recent sheets:", error);
+        } finally {
+            setIsFetchingRecentSheets(false);
+        }
+    }, []);
+
+    const fetchRecentDriveFiles = useCallback(async () => {
+        setIsFetchingDriveFiles(true);
+        try {
+            const res = await fetch('/api/integrations/google/drive/list');
+            const data = await res.json();
+            if (data.files) {
+                setRecentDriveFiles(data.files);
+            }
+        } catch (error) {
+            console.error("Failed to fetch recent drive files:", error);
+        } finally {
+            setIsFetchingDriveFiles(false);
+        }
+    }, []);
+
+    const fetchRecentCalendars = useCallback(async () => {
+        setIsFetchingCalendars(true);
+        try {
+            const res = await fetch('/api/integrations/google/calendar/list');
+            const data = await res.json();
+            if (data.calendars) {
+                setRecentCalendars(data.calendars);
+            }
+        } catch (error) {
+            console.error("Failed to fetch calendars:", error);
+        } finally {
+            setIsFetchingCalendars(false);
+        }
+    }, []);
+
+    const fetchRecentForms = useCallback(async () => {
+        setIsFetchingForms(true);
+        try {
+            const res = await fetch('/api/integrations/google/forms/list');
+            const data = await res.json();
+            if (data.forms) {
+                setRecentForms(data.forms);
+            }
+        } catch (error) {
+            console.error("Failed to fetch recent forms:", error);
+        } finally {
+            setIsFetchingForms(false);
+        }
+    }, []);
+
+    const fetchRecentEvents = useCallback(async (calId: string) => {
+        if (!calId) return;
+        setIsFetchingEvents(true);
+        try {
+            const res = await fetch(`/api/integrations/google/calendar/events?calendarId=${encodeURIComponent(calId)}`);
+            const data = await res.json();
+            if (data.events) {
+                setRecentEvents(data.events);
+            }
+        } catch (error) {
+            console.error("Failed to fetch events:", error);
+        } finally {
+            setIsFetchingEvents(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (node.data.nodeType === 'google-sheets') {
+            fetchRecentSheets();
+        }
+        if (node.data.nodeType === 'google-classroom') {
+            fetchClassroomMetadata();
+        }
+        if (node.data.nodeType === 'google-drive') {
+            fetchRecentDriveFiles();
+        }
+        if (node.data.nodeType === 'google-calendar') {
+            fetchRecentCalendars();
+            if (config.calendarId) {
+                fetchRecentEvents(config.calendarId);
+            }
+        }
+        if (node.data.nodeType === 'google-forms') {
+            fetchRecentForms();
+        }
+    }, [node.data.nodeType, fetchClassroomMetadata, fetchRecentSheets, fetchRecentDriveFiles, fetchRecentCalendars, fetchRecentEvents, fetchRecentForms, config.calendarId]);
+
+    const fetchSheetMetadata = useCallback(async (id: string) => {
+        if (!id || id === '' || id === 'auto') {
+            setSheetNames([]);
+            setSpreadsheetName(null);
+            setSheetError(null);
+            return;
+        }
+
+        setIsFetchingSheets(true);
+        setSheetError(null);
+        try {
+            const res = await fetch(`/api/integrations/google/sheets/metadata?spreadsheetId=${encodeURIComponent(id)}`);
+            const data = await res.json();
+            if (data.sheetNames) {
+                setSheetNames(data.sheetNames);
+                setSpreadsheetName(data.spreadsheetName);
+
+                // If the API extracted a clean ID from a URL, update it in the config
+                if (data.spreadsheetId && data.spreadsheetId !== id) {
+                    handleConfigChange("spreadsheetId", data.spreadsheetId);
+                }
+
+                // If no sheet is selected, default to the first one
+                if (!config.sheetName && data.sheetNames.length > 0) {
+                    handleConfigChange("sheetName", data.sheetNames[0]);
+                }
+            } else if (data.error) {
+                console.warn("[Meta Fetched] Error:", data.error);
+                setSheetError(data.error);
+                setSpreadsheetName(null);
+                setSheetNames([]);
+            }
+        } catch (error) {
+            console.error("Failed to fetch sheet metadata:", error);
+            setSheetError("Failed to verify ID");
+        } finally {
+            setIsFetchingSheets(false);
+        }
+    }, [config.sheetName, handleConfigChange]);
+
+
+    useEffect(() => {
+        if (node.data.nodeType === 'google-sheets' && config.spreadsheetId) {
+            const timer = setTimeout(() => {
+                fetchSheetMetadata(config.spreadsheetId);
+            }, 800); // Debounce to avoid too many requests while typing
+            return () => clearTimeout(timer);
+        }
+    }, [config.spreadsheetId, node.data.nodeType, fetchSheetMetadata]);
+
     const fetchWhatsAppGroups = async () => {
         setIsLoadingGroups(true);
         try {
@@ -1574,32 +1768,157 @@ function NodePropertiesPanel({
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="list-courses">List Courses</SelectItem>
-                                    <SelectItem value="get-students">Get Students</SelectItem>
+                                    <SelectItem value="list-courses">List My Classes</SelectItem>
+                                    <SelectItem value="list-announcements">Fetch Class Posts</SelectItem>
                                     <SelectItem value="post-announcement">Post Announcement</SelectItem>
-                                    <SelectItem value="create-assignment">Create Assignment</SelectItem>
+                                    <SelectItem value="create-coursework">New Assignment</SelectItem>
+                                    <SelectItem value="create-material">Add Material</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="courseId">Course ID</Label>
-                            <Input
-                                id="courseId"
-                                placeholder="course-123"
-                                value={config.courseId || ""}
-                                onChange={(e) => handleConfigChange("courseId", e.target.value)}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="announcementText">Announcement Text</Label>
-                            <Textarea
-                                id="announcementText"
-                                placeholder="Enter announcement..."
-                                value={config.announcementText || ""}
-                                onChange={(e) => handleConfigChange("announcementText", e.target.value)}
-                                rows={3}
-                            />
-                        </div>
+
+                        {(config.action !== "list-courses" && config.action !== "create-course") && (
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <Label htmlFor="courseId">Class Select</Label>
+                                    {isFetchingCourses && <RefreshCw className="w-3 h-3 animate-spin text-primary" />}
+                                </div>
+                                {courses.length > 0 ? (
+                                    <Select
+                                        value={config.courseId || ""}
+                                        onValueChange={(value) => handleConfigChange("courseId", value)}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select a class..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="auto">Auto-connect (Primary)</SelectItem>
+                                            {courses.map((course) => (
+                                                <SelectItem key={course.id} value={course.id}>
+                                                    {course.name} {course.section ? `(${course.section})` : ''}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                ) : (
+                                    <Input
+                                        id="courseId"
+                                        placeholder="auto (uses your active class)"
+                                        value={config.courseId || ""}
+                                        onChange={(e) => handleConfigChange("courseId", e.target.value)}
+                                    />
+                                )}
+                                <p className="text-[10px] text-muted-foreground mt-1">
+                                    {classroomError ? (
+                                        <span className="text-destructive flex items-center gap-1">
+                                            <X className="w-3 h-3" /> Error: {classroomError}
+                                        </span>
+                                    ) : courses.length > 0
+                                        ? `✨ Found ${courses.length} active classes.`
+                                        : "Leave empty to auto-connect to your primary classroom."
+                                    }
+                                </p>
+                            </div>
+                        )}
+
+                        {config.action === "post-announcement" && (
+                            <div className="space-y-2">
+                                <Label htmlFor="announcementText">Announcement Text</Label>
+                                <Textarea
+                                    id="announcementText"
+                                    placeholder="Message to post to class stream..."
+                                    value={config.announcementText || ""}
+                                    onChange={(e) => handleConfigChange("announcementText", e.target.value)}
+                                    rows={3}
+                                />
+                            </div>
+                        )}
+
+                        {(config.action === "create-coursework" || config.action === "create-material") && (
+                            <div className="space-y-2">
+                                <Label htmlFor="title">Title</Label>
+                                <Input
+                                    id="title"
+                                    placeholder="Enter title"
+                                    value={config.title || ""}
+                                    onChange={(e) => handleConfigChange("title", e.target.value)}
+                                />
+                            </div>
+                        )}
+
+                        {(config.action === "create-coursework" || config.action === "create-material" || config.action === "create-course") && (
+                            <div className="space-y-2">
+                                <Label htmlFor="description">Description (Optional)</Label>
+                                <Textarea
+                                    id="description"
+                                    placeholder="Additional details..."
+                                    value={config.description || ""}
+                                    onChange={(e) => handleConfigChange("description", e.target.value)}
+                                    rows={3}
+                                />
+                            </div>
+                        )}
+
+                        {config.action === "create-coursework" && (
+                            <div className="space-y-2">
+                                <Label htmlFor="dueDate">Due Date (Optional)</Label>
+                                <Input
+                                    id="dueDate"
+                                    type="date"
+                                    value={config.dueDate || ""}
+                                    onChange={(e) => handleConfigChange("dueDate", e.target.value)}
+                                />
+                            </div>
+                        )}
+
+                        {(config.action === "invite-student" || config.action === "invite-teacher") && (
+                            <div className="space-y-2">
+                                <Label htmlFor="email">Email Address</Label>
+                                <Input
+                                    id="email"
+                                    type="email"
+                                    placeholder="user@school.edu"
+                                    value={config.email || ""}
+                                    onChange={(e) => handleConfigChange("email", e.target.value)}
+                                />
+                            </div>
+                        )}
+
+                        {courses.length > 0 && (
+                            <div className="mt-4 p-3 bg-muted/30 rounded-lg border border-border/50">
+                                <h5 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-2">
+                                    <BookOpen className="w-3 h-3" /> Course Browser
+                                </h5>
+                                <div className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                                    {courses.map((course) => (
+                                        <div
+                                            key={course.id}
+                                            className={`p-2 rounded border text-xs cursor-pointer transition-all ${config.courseId === course.id
+                                                ? 'bg-primary/10 border-primary'
+                                                : 'bg-background hover:border-primary/50'
+                                                }`}
+                                            onClick={() => handleConfigChange("courseId", course.id)}
+                                        >
+                                            <div className="font-medium flex justify-between">
+                                                <span>{course.name}</span>
+                                                {course.alternateLink && (
+                                                    <a
+                                                        href={course.alternateLink}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="text-primary hover:underline hover:text-primary/80"
+                                                    >
+                                                        🔗 Link
+                                                    </a>
+                                                )}
+                                            </div>
+                                            {course.section && <div className="text-[10px] text-muted-foreground mt-0.5">{course.section}</div>}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </>
                 );
             case "google-drive":
@@ -1615,54 +1934,117 @@ function NodePropertiesPanel({
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="list-files">List Files</SelectItem>
-                                    <SelectItem value="upload">Upload File</SelectItem>
-                                    <SelectItem value="download">Download File</SelectItem>
-                                    <SelectItem value="create-folder">Create Folder</SelectItem>
+                                    <SelectItem value="list-files">List My Files</SelectItem>
+                                    <SelectItem value="create-folder">Create New Folder</SelectItem>
+                                    <SelectItem value="delete-file">Remove Item</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="folderId">Folder ID</Label>
-                            <Input
-                                id="folderId"
-                                placeholder="root"
-                                value={config.folderId || ""}
-                                onChange={(e) => handleConfigChange("folderId", e.target.value)}
-                            />
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="folderId">Parent Folder / Root</Label>
+                                <Input
+                                    id="folderId"
+                                    placeholder="auto or folder ID"
+                                    value={config.folderId || ""}
+                                    onChange={(e) => handleConfigChange("folderId", e.target.value)}
+                                />
+                                <p className="text-[10px] text-muted-foreground italic">Use 'root' for your main Drive or leave 'auto'.</p>
+                            </div>
+
+                            {/* Drive File Browser */}
+                            <div className="p-3 bg-muted/30 rounded-lg border border-border/50">
+                                <div className="flex items-center justify-between mb-2">
+                                    <h4 className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground flex items-center gap-1">
+                                        <HardDrive className="w-3 h-3" /> Recent Drive Items
+                                    </h4>
+                                    {isFetchingDriveFiles && <RefreshCw className="w-2.5 h-2.5 animate-spin" />}
+                                </div>
+
+                                <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1 thin-scrollbar">
+                                    {recentDriveFiles.length > 0 ? (
+                                        recentDriveFiles.map((file) => (
+                                            <button
+                                                key={file.id}
+                                                onClick={() => {
+                                                    // Depending on the action, we might set folderId or fileId
+                                                    if (config.action === 'delete-file' || config.action === 'get-file') {
+                                                        handleConfigChange("fileId", file.id);
+                                                    } else {
+                                                        handleConfigChange("folderId", file.id);
+                                                    }
+                                                }}
+                                                className={`w-full text-left p-2 rounded-md transition-all flex items-center gap-2 group ${config.folderId === file.id || config.fileId === file.id
+                                                    ? 'bg-primary/10 border-primary/20 border shadow-sm'
+                                                    : 'hover:bg-background border border-transparent'
+                                                    }`}
+                                            >
+                                                {file.iconLink ? (
+                                                    <img src={file.iconLink} alt="" className="w-4 h-4" />
+                                                ) : (
+                                                    <FileText className="w-4 h-4 text-blue-600" />
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center justify-between">
+                                                        <p className="text-[11px] font-medium truncate group-hover:text-primary transition-colors">
+                                                            {file.name}
+                                                        </p>
+                                                        {file.webViewLink && (
+                                                            <a
+                                                                href={file.webViewLink}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="text-[9px] text-primary hover:underline hover:text-primary/80 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                            >
+                                                                Open 🔗
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-[9px] text-muted-foreground truncate uppercase">
+                                                        {file.mimeType.split('.').pop() || 'Item'}
+                                                    </p>
+                                                </div>
+                                            </button>
+                                        ))
+                                    ) : !isFetchingDriveFiles ? (
+                                        <p className="text-[10px] text-muted-foreground italic p-2">No items found.</p>
+                                    ) : null}
+                                </div>
+                                <p className="text-[9px] text-muted-foreground mt-2 italic px-1">
+                                    Click an item above to select it.
+                                </p>
+                            </div>
+
+                            {config.action === "create-folder" && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="folderName">New Folder Name</Label>
+                                    <Input
+                                        id="folderName"
+                                        placeholder="Enter folder name..."
+                                        value={config.folderName || ""}
+                                        onChange={(e) => handleConfigChange("folderName", e.target.value)}
+                                    />
+                                </div>
+                            )}
+
+                            {(config.action === "delete-file" || config.action === "get-file") && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="fileId">Specific File ID</Label>
+                                    <Input
+                                        id="fileId"
+                                        placeholder="Select from browser or enter ID"
+                                        value={config.fileId || ""}
+                                        onChange={(e) => handleConfigChange("fileId", e.target.value)}
+                                    />
+                                </div>
+                            )}
                         </div>
                     </>
                 );
             case "google-sheets":
                 return (
                     <>
-                        <div className="space-y-2">
-                            <Label htmlFor="spreadsheetId">Spreadsheet ID</Label>
-                            <Input
-                                id="spreadsheetId"
-                                placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
-                                value={config.spreadsheetId || ""}
-                                onChange={(e) => handleConfigChange("spreadsheetId", e.target.value)}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="sheetName">Sheet Name</Label>
-                            <Input
-                                id="sheetName"
-                                placeholder="Sheet1"
-                                value={config.sheetName || ""}
-                                onChange={(e) => handleConfigChange("sheetName", e.target.value)}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="range">Range</Label>
-                            <Input
-                                id="range"
-                                placeholder="A1:Z100"
-                                value={config.range || ""}
-                                onChange={(e) => handleConfigChange("range", e.target.value)}
-                            />
-                        </div>
                         <div className="space-y-2">
                             <Label htmlFor="action">Action</Label>
                             <Select
@@ -1673,43 +2055,324 @@ function NodePropertiesPanel({
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="read">Read Data</SelectItem>
-                                    <SelectItem value="write">Write Data</SelectItem>
-                                    <SelectItem value="append">Append Row</SelectItem>
+                                    <SelectItem value="read">Read Spreadsheet Data</SelectItem>
+                                    <SelectItem value="write">Update Entire Data</SelectItem>
+                                    <SelectItem value="append">Add New Row</SelectItem>
                                 </SelectContent>
                             </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="spreadsheetId">Spreadsheet Select</Label>
+                                {isFetchingSheets && <RefreshCw className="w-3 h-3 animate-spin text-primary" />}
+                            </div>
+                            <Input
+                                id="spreadsheetId"
+                                placeholder="Paste ID or full spreadsheet URL..."
+                                value={config.spreadsheetId || ""}
+                                onChange={(e) => handleConfigChange("spreadsheetId", e.target.value)}
+                            />
+                            {spreadsheetName && (
+                                <p className="text-[10px] font-medium text-green-600 mt-1 flex items-center gap-1">
+                                    <Sparkles className="w-3 h-3" /> Found: {spreadsheetName}
+                                </p>
+                            )}
+                            {sheetError && (
+                                <p className="text-[10px] font-medium text-destructive mt-1 flex items-center gap-1">
+                                    <X className="w-3 h-3" /> Error: {sheetError}
+                                </p>
+                            )}
+
+                            {/* Recent Spreadsheet Browser */}
+                            <div className="mt-4 p-3 bg-muted/30 rounded-lg border border-border/50">
+                                <div className="flex items-center justify-between mb-2">
+                                    <h4 className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground flex items-center gap-1">
+                                        <FileSpreadsheet className="w-3 h-3" /> From your Drive
+                                    </h4>
+                                    {isFetchingRecentSheets && <RefreshCw className="w-2.5 h-2.5 animate-spin" />}
+                                </div>
+
+                                <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1 thin-scrollbar">
+                                    {recentSheets.length > 0 ? (
+                                        recentSheets.map((file) => (
+                                            <button
+                                                key={file.id}
+                                                onClick={() => {
+                                                    handleConfigChange("spreadsheetId", file.id);
+                                                    setSpreadsheetName(file.name);
+                                                    setSheetError(null);
+                                                }}
+                                                className={`w-full text-left p-2 rounded-md transition-all flex items-center gap-2 group ${config.spreadsheetId === file.id
+                                                    ? 'bg-primary/10 border-primary/20 border shadow-sm'
+                                                    : 'hover:bg-background border border-transparent'
+                                                    }`}
+                                            >
+                                                {file.iconLink ? (
+                                                    <img src={file.iconLink} alt="" className="w-4 h-4" />
+                                                ) : (
+                                                    <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center justify-between">
+                                                        <p className="text-[11px] font-medium truncate group-hover:text-primary transition-colors">
+                                                            {file.name}
+                                                        </p>
+                                                        {file.webViewLink && (
+                                                            <a
+                                                                href={file.webViewLink}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="text-[9px] text-primary hover:underline hover:text-primary/80 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                            >
+                                                                Open 🔗
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-[9px] text-muted-foreground truncate">
+                                                        {file.mimeType.split('.').pop()?.replace('spreadsheet', 'Sheet') || 'File'}
+                                                    </p>
+                                                </div>
+                                            </button>
+                                        ))
+                                    ) : !isFetchingRecentSheets ? (
+                                        <p className="text-[10px] text-muted-foreground italic p-2">No spreadsheets found recently.</p>
+                                    ) : null}
+                                </div>
+                                <p className="text-[9px] text-muted-foreground mt-2 italic px-1">
+                                    Click a file above to select it instantly.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="range">Sheet & Range</Label>
+                            <div className="flex gap-2">
+                                {sheetNames.length > 0 ? (
+                                    <Select
+                                        value={config.sheetName || ""}
+                                        onValueChange={(value) => handleConfigChange("sheetName", value)}
+                                    >
+                                        <SelectTrigger className="w-1/3">
+                                            <SelectValue placeholder="Sheet" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {sheetNames.map((name) => (
+                                                <SelectItem key={name} value={name}>{name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                ) : (
+                                    <Input
+                                        id="sheetName"
+                                        placeholder="Sheet1"
+                                        className="w-1/3"
+                                        value={config.sheetName || ""}
+                                        onChange={(e) => handleConfigChange("sheetName", e.target.value)}
+                                    />
+                                )}
+                                <Input
+                                    id="range"
+                                    placeholder="A1:Z100"
+                                    className="flex-1"
+                                    value={config.range || ""}
+                                    onChange={(e) => handleConfigChange("range", e.target.value)}
+                                />
+                            </div>
+                            {sheetNames.length > 0 && (
+                                <p className="text-[10px] text-muted-foreground italic">
+                                    ✨ Automatically fetched {sheetNames.length} sheets from your spreadsheet.
+                                </p>
+                            )}
                         </div>
                     </>
                 );
             case "google-calendar":
+                const normalizedAction = (config.action || "list-events").replace(/-/g, '_');
                 return (
-                    <>
+                    <div className="space-y-4">
                         <div className="space-y-2">
                             <Label htmlFor="action">Action</Label>
                             <Select
-                                value={config.action || "list-events"}
-                                onValueChange={(value) => handleConfigChange("action", value)}
+                                value={normalizedAction}
+                                onValueChange={(value) => handleConfigChange("action", value.replace(/_/g, '-'))}
                             >
                                 <SelectTrigger>
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="list-events">List Events</SelectItem>
-                                    <SelectItem value="create-event">Create Event</SelectItem>
-                                    <SelectItem value="update-event">Update Event</SelectItem>
+                                    <SelectItem value="list_events">List Events</SelectItem>
+                                    <SelectItem value="create_event">Create Event</SelectItem>
+                                    <SelectItem value="get_event">Get Event Details</SelectItem>
+                                    <SelectItem value="update_event">Update Event</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
+
                         <div className="space-y-2">
-                            <Label htmlFor="eventTitle">Event Title</Label>
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="calendarId">Calendar Select</Label>
+                                {isFetchingCalendars && <RefreshCw className="w-3 h-3 animate-spin text-primary" />}
+                            </div>
                             <Input
-                                id="eventTitle"
-                                placeholder="Class Meeting"
-                                value={config.eventTitle || ""}
-                                onChange={(e) => handleConfigChange("eventTitle", e.target.value)}
+                                id="calendarId"
+                                placeholder="primary or calendar ID"
+                                value={config.calendarId || ""}
+                                onChange={(e) => handleConfigChange("calendarId", e.target.value)}
                             />
+
+                            {/* Calendar Browser */}
+                            <div className="mt-3 p-3 bg-muted/30 rounded-lg border border-border/50">
+                                <div className="flex items-center justify-between mb-2">
+                                    <h4 className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground flex items-center gap-1">
+                                        <Calendar className="w-3 h-3" /> Your Calendars
+                                    </h4>
+                                </div>
+
+                                <div className="space-y-1.5 max-h-[140px] overflow-y-auto pr-1 thin-scrollbar">
+                                    {recentCalendars.length > 0 ? (
+                                        recentCalendars.map((cal) => (
+                                            <button
+                                                key={cal.id}
+                                                onClick={() => handleConfigChange("calendarId", cal.id)}
+                                                className={`w-full text-left p-2 rounded-md transition-all flex items-center gap-2 group ${config.calendarId === cal.id
+                                                    ? 'bg-primary/10 border-primary/20 border shadow-sm'
+                                                    : 'hover:bg-background border border-transparent'
+                                                    }`}
+                                            >
+                                                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cal.backgroundColor || '#4285f4' }} />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-[11px] font-medium truncate group-hover:text-primary transition-colors">
+                                                        {cal.summary}
+                                                    </p>
+                                                    <p className="text-[9px] text-muted-foreground truncate uppercase">
+                                                        {cal.role}
+                                                    </p>
+                                                </div>
+                                            </button>
+                                        ))
+                                    ) : !isFetchingCalendars ? (
+                                        <p className="text-[10px] text-muted-foreground italic p-2">No calendars found.</p>
+                                    ) : null}
+                                </div>
+                            </div>
                         </div>
-                    </>
+
+                        {/* Event Browser */}
+                        {(normalizedAction === "get_event" || normalizedAction === "update_event" || normalizedAction === "list_events") && config.calendarId && (
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground flex items-center gap-1">
+                                        <Clock className="w-3 h-3" /> Upcoming Events
+                                    </Label>
+                                    {isFetchingEvents && <RefreshCw className="w-3 h-3 animate-spin text-primary" />}
+                                </div>
+                                <div className="p-3 bg-muted/20 rounded-lg border border-border/40 space-y-1.5 max-h-[160px] overflow-y-auto thin-scrollbar">
+                                    {recentEvents.length > 0 ? (
+                                        recentEvents.map((event) => (
+                                            <button
+                                                key={event.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    handleConfigChange("eventId", event.id);
+                                                    if (normalizedAction === "update_event") {
+                                                        handleConfigChange("eventTitle", event.summary || "");
+                                                        handleConfigChange("description", event.description || "");
+                                                        if (event.start?.dateTime) {
+                                                            handleConfigChange("startDate", event.start.dateTime.slice(0, 16));
+                                                        }
+                                                        if (event.end?.dateTime) {
+                                                            handleConfigChange("endDate", event.end.dateTime.slice(0, 16));
+                                                        }
+                                                    }
+                                                }}
+                                                className={`w-full text-left p-2 rounded-md transition-all flex flex-col gap-0.5 group ${config.eventId === event.id
+                                                    ? 'bg-primary/10 border-primary/20 border shadow-sm'
+                                                    : 'hover:bg-background border border-transparent'
+                                                    }`}
+                                            >
+                                                <div className="flex items-center justify-between w-full">
+                                                    <p className="text-[11px] font-medium truncate group-hover:text-primary transition-colors">
+                                                        {event.summary || '(No Title)'}
+                                                    </p>
+                                                    <span className="text-[9px] text-muted-foreground">
+                                                        {event.start?.dateTime ? new Date(event.start.dateTime).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'All Day'}
+                                                    </span>
+                                                </div>
+                                                <p className="text-[9px] text-muted-foreground truncate">
+                                                    {event.start?.dateTime ? new Date(event.start.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'No Time'}
+                                                </p>
+                                            </button>
+                                        ))
+                                    ) : !isFetchingEvents ? (
+                                        <p className="text-[10px] text-muted-foreground italic p-1">No upcoming events found.</p>
+                                    ) : (
+                                        <div className="flex items-center justify-center p-4">
+                                            <RefreshCw className="w-4 h-4 animate-spin text-muted-foreground" />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {(normalizedAction === "create_event" || normalizedAction === "update_event") && (
+                            <div className="space-y-2">
+                                <Label htmlFor="eventTitle">Event Title</Label>
+                                <Input
+                                    id="eventTitle"
+                                    placeholder="Class Meeting"
+                                    value={config.eventTitle || ""}
+                                    onChange={(e) => handleConfigChange("eventTitle", e.target.value)}
+                                />
+                            </div>
+                        )}
+
+                        {(normalizedAction === "get_event" || normalizedAction === "update_event") && (
+                            <div className="space-y-2">
+                                <Label htmlFor="eventId">Event ID</Label>
+                                <Input
+                                    id="eventId"
+                                    placeholder="Enter event ID..."
+                                    value={config.eventId || ""}
+                                    onChange={(e) => handleConfigChange("eventId", e.target.value)}
+                                />
+                            </div>
+                        )}
+
+                        {(normalizedAction === "create_event" || normalizedAction === "update_event") && (
+                            <>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="startDate">Start Date/Time</Label>
+                                        <Input
+                                            id="startDate"
+                                            type="datetime-local"
+                                            value={config.startDate || ""}
+                                            onChange={(e) => handleConfigChange("startDate", e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="endDate">End Date/Time</Label>
+                                        <Input
+                                            id="endDate"
+                                            type="datetime-local"
+                                            value={config.endDate || ""}
+                                            onChange={(e) => handleConfigChange("endDate", e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="description">Description / Agenda</Label>
+                                    <Textarea
+                                        id="description"
+                                        placeholder="Meeting details..."
+                                        value={config.description || ""}
+                                        onChange={(e) => handleConfigChange("description", e.target.value)}
+                                        rows={2}
+                                    />
+                                </div>
+                            </>
+                        )}
+                    </div>
                 );
             case "google-meet":
                 return (
@@ -1747,32 +2410,93 @@ function NodePropertiesPanel({
                 );
             case "google-forms":
                 return (
-                    <>
-                        <div className="space-y-2">
-                            <Label htmlFor="formId">Form ID</Label>
-                            <Input
-                                id="formId"
-                                placeholder="1FAIpQLSc..."
-                                value={config.formId || ""}
-                                onChange={(e) => handleConfigChange("formId", e.target.value)}
-                            />
-                        </div>
+                    <div className="space-y-4">
                         <div className="space-y-2">
                             <Label htmlFor="action">Action</Label>
                             <Select
-                                value={config.action || "get-responses"}
-                                onValueChange={(value) => handleConfigChange("action", value)}
+                                value={config.action || "get_responses"}
+                                onValueChange={(value) => handleConfigChange("action", value.replace(/-/g, '_'))}
                             >
                                 <SelectTrigger>
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="get-responses">Get Responses</SelectItem>
-                                    <SelectItem value="get-summary">Get Summary</SelectItem>
+                                    <SelectItem value="get_responses">Fetch Form Responses</SelectItem>
+                                    <SelectItem value="get_form">Get Form Details</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
-                    </>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="formId">Google Form</Label>
+                            <div className="flex gap-2">
+                                <Input
+                                    id="formId"
+                                    placeholder="Paste Form ID or URL..."
+                                    value={config.formId || ""}
+                                    onChange={(e) => handleConfigChange("formId", e.target.value)}
+                                    className="flex-1"
+                                />
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={fetchRecentForms}
+                                    disabled={isFetchingForms}
+                                    title="Reload Forms"
+                                >
+                                    <RefreshCw className={`w-4 h-4 ${isFetchingForms ? 'animate-spin' : ''}`} />
+                                </Button>
+                            </div>
+
+                            {/* Form Browser */}
+                            <div className="mt-3 p-3 bg-muted/20 rounded-lg border border-border/40">
+                                <div className="flex items-center justify-between mb-2">
+                                    <h4 className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground flex items-center gap-1">
+                                        <FormInput className="w-3 h-3" /> Your Forms
+                                    </h4>
+                                </div>
+
+                                <div className="space-y-1.5 max-h-[140px] overflow-y-auto pr-1 thin-scrollbar">
+                                    {recentForms.length > 0 ? (
+                                        recentForms.map((form) => (
+                                            <button
+                                                key={form.id}
+                                                type="button"
+                                                onClick={() => handleConfigChange("formId", form.id)}
+                                                className={`w-full text-left p-2 rounded-md transition-all flex items-center gap-2 group ${config.formId === form.id
+                                                    ? 'bg-primary/10 border-primary/20 border shadow-sm'
+                                                    : 'hover:bg-background border border-transparent'
+                                                    }`}
+                                            >
+                                                <div className="p-1 rounded bg-purple-500/10 group-hover:bg-purple-500/20 transition-colors">
+                                                    <FormInput className="w-3 h-3 text-purple-600" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-[11px] font-medium truncate group-hover:text-primary transition-colors">
+                                                        {form.name}
+                                                    </p>
+                                                    <p className="text-[9px] text-muted-foreground truncate uppercase">
+                                                        MODIFIED {new Date(form.modifiedTime).toLocaleDateString()}
+                                                    </p>
+                                                </div>
+                                            </button>
+                                        ))
+                                    ) : !isFetchingForms ? (
+                                        <p className="text-[10px] text-muted-foreground italic p-2">No forms found. Make sure you have created one.</p>
+                                    ) : (
+                                        <div className="flex items-center justify-center p-4">
+                                            <RefreshCw className="w-4 h-4 animate-spin text-primary/40" />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <p className="text-[10px] text-muted-foreground bg-blue-50 dark:bg-blue-900/10 p-2 rounded italic border border-blue-100 dark:border-blue-900/30 flex items-center gap-2">
+                            <Sparkles className="w-3 h-3 text-blue-500" />
+                            Tip: Use manual Form ID if your form doesn't appear in the list.
+                        </p>
+                    </div>
                 );
 
             // Microsoft

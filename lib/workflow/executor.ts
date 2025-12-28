@@ -4,6 +4,7 @@ import { WorkflowNode, NodeResult, NodeExecutionContext } from '@/lib/types';
 import { createNodeInstance } from './nodes';
 import { emitDashboardEvent, emitNotification } from '@/lib/realtime';
 import { checkWorkflowIntegrations, getMissingIntegrationsSummary } from './integration-check';
+import { getOAuthTokens } from '@/lib/auth';
 
 function isWorkflowNodeArray(v: any): v is WorkflowNode[] {
   return Array.isArray(v) && v.every(item =>
@@ -12,7 +13,7 @@ function isWorkflowNodeArray(v: any): v is WorkflowNode[] {
 }
 
 export class WorkflowExecutor {
-  async execute(workflowId: string, payload?: Record<string, any>): Promise<string> {
+  async execute(workflowId: string, payload?: Record<string, any>, userId?: string): Promise<string> {
     const runId = `run_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     try {
@@ -75,7 +76,7 @@ export class WorkflowExecutor {
           throw new Error(`Node ${node.id} (${nodeType}) validation failed: ${validationError instanceof Error ? validationError.message : String(validationError)}`);
         }
 
-        const credentials = await this.getIntegrationCredentials(workflow.organizationId, nodeType);
+        const credentials = await this.getIntegrationCredentials(workflow.organizationId, nodeType, userId);
 
         const context: NodeExecutionContext = {
           input: currentInput,
@@ -238,25 +239,108 @@ export class WorkflowExecutor {
 
   private async getIntegrationCredentials(
     organizationId: string,
-    nodeType: string
+    nodeType: string,
+    userId?: string
   ): Promise<Record<string, any> | null> {
+    console.log(`[Executor] Getting credentials for ${nodeType} in org ${organizationId}`);
+
     const integrationMap: Record<string, string> = {
+      // Twilio
       'twilio-sms': 'twilio',
       'twilio-whatsapp': 'twilio',
       'whatsapp-group': 'twilio',
+      // Email
       'email-send': 'gmail',
+      // Chat
       'slack-send': 'slack',
       'discord-send': 'discord',
+      'telegram-send': 'telegram',
+      // Google Suite
+      'google-classroom': 'google-classroom',
+      'google-sheets': 'google-sheets',
+      'google-calendar': 'google-calendar',
+      'google-meet': 'google-meet',
+      'google-drive': 'google-drive',
+      'google-forms': 'google-forms',
+      // Microsoft
+      'microsoft-teams': 'microsoft',
+      'microsoft-outlook': 'microsoft',
+      'microsoft-onedrive': 'onedrive',
+      'microsoft-excel': 'microsoft',
+      // Zoom
+      'zoom-meeting': 'zoom',
+      'zoom-recording': 'zoom',
+      // AI
+      'ai-summarize': 'openai',
+      'ai-translate': 'openai',
+      'ai-sentiment': 'openai',
+      'local-ai': 'openai',
+      'local-search': 'openai',
     };
 
     const integrationType = integrationMap[nodeType];
-    if (!integrationType) return null;
+    if (!integrationType) {
+      console.log(`[Executor] No integration mapping for ${nodeType}`);
+      return null;
+    }
 
     try {
+      // First, try to get credentials from the integration connection in DB
       const connection = await prisma.integrationConnection.findFirst({
         where: { organizationId, type: integrationType },
       });
-      return (connection?.credentials as any) ?? null;
+
+      let credentials = (connection?.credentials as any) ?? {};
+      if (connection) {
+        console.log(`[Executor] Found DB credentials for ${integrationType}`);
+      }
+
+      // For Google services, try to get OAuth token from Clerk
+      const isGoogleService = nodeType.startsWith('google-');
+      const isMicrosoftService = nodeType.startsWith('microsoft-');
+
+      if (isGoogleService || isMicrosoftService) {
+        // Find the specific user if userId is provided, otherwise find any user in this organization
+        const orgUser = userId
+          ? await prisma.user.findFirst({ where: { clerkId: userId } })
+          : await prisma.user.findFirst({
+            where: { organizationId },
+            select: { clerkId: true, email: true },
+          });
+
+        if (orgUser?.clerkId) {
+          console.log(`[Executor] Attempting to fetch OAuth token for ${orgUser.email || orgUser.clerkId} (${orgUser.clerkId})`);
+          try {
+            const oauthTokens = await getOAuthTokens(orgUser.clerkId);
+
+            if (isGoogleService && oauthTokens.google) {
+              console.log(`[Executor] Successfully got Google OAuth token from Clerk`);
+              credentials = {
+                ...credentials,
+                accessToken: oauthTokens.google,
+              };
+            } else if (isGoogleService) {
+              console.warn(`[Executor] No Google OAuth token returned from Clerk for user ${orgUser.clerkId}`);
+            }
+
+            if (isMicrosoftService && oauthTokens.microsoft) {
+              console.log(`[Executor] Successfully got Microsoft OAuth token from Clerk`);
+              credentials = {
+                ...credentials,
+                accessToken: oauthTokens.microsoft,
+              };
+            }
+          } catch (oauthError) {
+            console.warn('[Executor] Error calling getOAuthTokens:', oauthError);
+          }
+        } else {
+          console.warn(`[Executor] No user found with clerkId in organization ${organizationId}`);
+        }
+      }
+
+      const hasCreds = Object.keys(credentials).length > 0;
+      console.log(`[Executor] Returning credentials: ${hasCreds ? 'Yes' : 'No'}`);
+      return hasCreds ? credentials : null;
     } catch (error) {
       console.error('Error fetching integration credentials:', error);
       return null;

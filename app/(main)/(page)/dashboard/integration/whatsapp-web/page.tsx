@@ -138,7 +138,7 @@ export default function WhatsAppWebPage() {
     }, [status.connected]);
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-background via-background to-green-50/20 dark:to-green-900/5">
+        <div className="min-h-screen bg-linear-to-br from-background via-background to-green-50/20 dark:to-green-900/5">
             {/* Header */}
             <div className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-10">
                 <div className="container mx-auto px-6 py-6">
@@ -367,35 +367,35 @@ export default function WhatsAppWebPage() {
                     <CardContent>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div className="flex gap-4">
-                                <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
+                                <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0">
                                     <span className="font-bold text-green-600">1</span>
                                 </div>
                                 <div>
                                     <p className="font-medium">Connect WhatsApp</p>
                                     <p className="text-sm text-muted-foreground">
-                                        Click "Connect WhatsApp" and scan the QR code with your phone
+                                        Click &quot;Connect WhatsApp&quot; and scan the QR code with your phone
                                     </p>
                                 </div>
                             </div>
                             <div className="flex gap-4">
-                                <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
+                                <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0">
                                     <span className="font-bold text-green-600">2</span>
                                 </div>
                                 <div>
                                     <p className="font-medium">Create a Workflow</p>
                                     <p className="text-sm text-muted-foreground">
-                                        Add a "WhatsApp Group" node and enable "Send to Group"
+                                        Add a &quot;WhatsApp Group&quot; node and enable &quot;Send to Group&quot;
                                     </p>
                                 </div>
                             </div>
                             <div className="flex gap-4">
-                                <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
+                                <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0">
                                     <span className="font-bold text-green-600">3</span>
                                 </div>
                                 <div>
                                     <p className="font-medium">Enter Group Name</p>
                                     <p className="text-sm text-muted-foreground">
-                                        Type your group name (e.g., "College Group") and run!
+                                        Type your group name (e.g., &quot;College Group&quot;) and run!
                                     </p>
                                 </div>
                             </div>

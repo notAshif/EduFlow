@@ -42,6 +42,8 @@ import {
     Zap,
     Link2,
     Unlink,
+    FormInput,
+    CheckSquare
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
@@ -128,22 +130,6 @@ const defaultIntegrations: Integration[] = [
         category: 'lms',
         enabled: false,
         configFields: ['apiKey', 'customField1'],
-        connectionStatus: 'disconnected',
-    },
-
-    // Communication
-    {
-        id: 'whatsapp',
-        name: 'WhatsApp for Parents',
-        description: 'Send automated attendance alerts and progress updates to parents via WhatsApp.',
-        icon: <Phone className="w-6 h-6" />,
-        iconBg: 'bg-green-100',
-        iconColor: 'text-green-600',
-        url: 'whatsapp.com',
-        category: 'communication',
-        enabled: false,
-        popular: true,
-        configFields: ['phoneNumber', 'apiKey'],
         connectionStatus: 'disconnected',
     },
     {
@@ -251,6 +237,19 @@ const defaultIntegrations: Integration[] = [
         category: 'grading',
         enabled: false,
         configFields: ['apiKey'],
+        connectionStatus: 'disconnected',
+    },
+    {
+        id: 'google-forms',
+        name: 'Google Forms',
+        description: 'Automate data collection and student assessments with Google Forms.',
+        icon: <CheckSquare className="w-6 h-6" />,
+        iconBg: 'bg-purple-100',
+        iconColor: 'text-purple-600',
+        url: 'forms.google.com',
+        category: 'grading',
+        enabled: false,
+        configFields: ['clientId', 'clientSecret'],
         connectionStatus: 'disconnected',
     },
 
@@ -368,7 +367,7 @@ const defaultIntegrations: Integration[] = [
     },
 ]
 
-type Tab = 'all' | 'lms' | 'communication' | 'grading' | 'scheduling' | 'storage' | 'custom'
+type Tab = 'all' | 'lms' | 'communication' | 'grading' | 'scheduling' | 'storage' | 'analytics' | 'ai' | 'custom'
 
 const tabLabels: Record<Tab, string> = {
     all: 'All Integrations',
@@ -377,6 +376,8 @@ const tabLabels: Record<Tab, string> = {
     grading: 'Grading & Assessment',
     scheduling: 'Scheduling',
     storage: 'Storage & Files',
+    analytics: 'Analytics & Reporting',
+    ai: 'AI Tools',
     custom: 'Custom',
 }
 
@@ -634,7 +635,7 @@ export default function IntegrationPage() {
         const hasConfig = Object.keys(configForm).some(k => configForm[k as keyof IntegrationConfig])
 
         // Test the connection
-        let connectionResult = await testConnection(selectedIntegration, configForm)
+        const connectionResult = await testConnection(selectedIntegration, configForm)
 
         // Save to database
         if (hasConfig && connectionResult.success) {
@@ -1139,7 +1140,7 @@ export default function IntegrationPage() {
                             {selectedIntegration.configFields.length === 0 && (
                                 <div className="flex items-center gap-2 text-muted-foreground p-4 bg-muted rounded-lg">
                                     <AlertCircle className="w-5 h-5" />
-                                    <p className="text-sm">This integration doesn't require additional configuration.</p>
+                                    <p className="text-sm">This integration doesn&apos;t require additional configuration.</p>
                                 </div>
                             )}
 

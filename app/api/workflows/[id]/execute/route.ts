@@ -12,14 +12,14 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAuth();
+    const user = await requireAuth();
     const { id } = await params;
 
     const body = await request.json();
     const { payload } = executeSchema.parse(body);
 
     const executor = new WorkflowExecutor();
-    const runId = await executor.execute(id, payload);
+    const runId = await executor.execute(id, payload, user.clerkId);
 
     return NextResponse.json(
       { ok: true, data: { runId } },

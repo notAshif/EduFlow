@@ -11,13 +11,13 @@ export async function GET() {
             discord: !!process.env.DISCORD_WEBHOOK_URL,
             slack: !!process.env.SLACK_WEBHOOK_URL,
             email: !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS),
-            whatsapp: !!(process.env.WHATSAPP_BUSINESS_ACCOUNT_ID && process.env.WHATSAPP_ACCESS_TOKEN),
+            gmail: !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS),
             sms: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
             openai: !!process.env.OPENAI_API_KEY,
         };
 
         // Also check database for user-specific configurations
-        let dbIntegrations: Record<string, boolean> = {};
+        const dbIntegrations: Record<string, boolean> = {};
         try {
             const user = await getCurrentUser();
             if (user?.organizationId) {
@@ -125,18 +125,6 @@ export async function POST(request: NextRequest) {
                         message: 'Email integration configured',
                         configured: true,
                         source: smtpConfigured ? 'env' : 'manual'
-                    });
-                }
-                break;
-
-            case 'whatsapp':
-                const waConfigured = !!(process.env.WHATSAPP_BUSINESS_ACCOUNT_ID && process.env.WHATSAPP_ACCESS_TOKEN);
-                if (waConfigured || effectiveConfig?.apiKey || effectiveConfig?.phoneNumber) {
-                    return NextResponse.json({
-                        success: true,
-                        message: 'WhatsApp integration configured',
-                        configured: true,
-                        source: waConfigured ? 'env' : 'manual'
                     });
                 }
                 break;

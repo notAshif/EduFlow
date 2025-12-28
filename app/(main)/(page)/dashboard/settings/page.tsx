@@ -203,8 +203,8 @@ export default function SettingsPage() {
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id)}
                                     className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === tab.id
-                                            ? 'bg-primary text-primary-foreground'
-                                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                        ? 'bg-primary text-primary-foreground'
+                                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                                         }`}
                                 >
                                     <tab.icon className="w-4 h-4" />
@@ -331,7 +331,12 @@ export default function SettingsPage() {
                                             </div>
                                         </div>
                                         {googleAccount ? (
-                                            <Badge className="bg-green-100 text-green-700">Connected</Badge>
+                                            <div className="flex flex-col items-end gap-1">
+                                                <Badge className="bg-green-100 text-green-700">Connected</Badge>
+                                                <p className="text-[10px] text-muted-foreground max-w-[150px] text-right">
+                                                    If calendar actions fail, re-connect and grant full access.
+                                                </p>
+                                            </div>
                                         ) : (
                                             <Button variant="outline" size="sm" onClick={() => openUserProfile()}>
                                                 Connect
@@ -545,8 +550,8 @@ export default function SettingsPage() {
                                                 key={theme.id}
                                                 onClick={() => setAppearance({ ...appearance, theme: theme.id })}
                                                 className={`px-4 py-2 rounded-lg border-2 transition-colors ${appearance.theme === theme.id
-                                                        ? 'border-primary bg-primary/10'
-                                                        : 'border-muted hover:border-primary/50'
+                                                    ? 'border-primary bg-primary/10'
+                                                    : 'border-muted hover:border-primary/50'
                                                     }`}
                                             >
                                                 {theme.label}

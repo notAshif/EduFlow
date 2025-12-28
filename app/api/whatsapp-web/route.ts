@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
                     ok: true,
                     groups,
                     count: groups.length
-                });
+                });        
 
             case 'status':
                 // Just get status

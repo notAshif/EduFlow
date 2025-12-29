@@ -249,6 +249,56 @@ export default function WorkflowsPage() {
     }
   }
 
+  const handleDuplicateWorkflow = async (workflowId: string, workflowName: string) => {
+    try {
+      const response = await fetch(`/api/workflows/${workflowId}/duplicate`, {
+        method: 'POST',
+      })
+
+      if (response.status === 401) {
+        setAuthError(true)
+        return
+      }
+
+      const data = await response.json()
+
+      if (data.ok) {
+        toast({
+          title: 'Workflow Duplicated',
+          description: `"${workflowName}" has been cloned successfully`,
+        })
+
+        // Manual update in case SSE is disconnected or slow
+        setWorkflows(prev => {
+          // Check if it already exists from SSE to avoid doubles
+          if (prev.some(wf => wf.id === data.data.id)) return prev;
+
+          return [{
+            ...data.data,
+            runCount: 0,
+            isNew: true
+          }, ...prev]
+        })
+
+        // Remove highlight after 3 seconds
+        setTimeout(() => {
+          setWorkflows(prev => prev.map(wf =>
+            wf.id === data.data.id ? { ...wf, isNew: false } : wf
+          ))
+        }, 3000)
+      } else {
+        throw new Error(data.error)
+      }
+    } catch (error) {
+      console.error('Failed to duplicate workflow:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to duplicate workflow',
+        variant: 'destructive',
+      })
+    }
+  }
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'SUCCESS':
@@ -425,7 +475,9 @@ export default function WorkflowsPage() {
                         Edit
                       </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => handleDuplicateWorkflow(workflow.id, workflow.name)}
+                    >
                       <Copy className="w-4 h-4 mr-2" />
                       Duplicate
                     </DropdownMenuItem>

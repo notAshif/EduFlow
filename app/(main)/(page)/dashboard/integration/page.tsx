@@ -308,19 +308,6 @@ const defaultIntegrations: Integration[] = [
         configFields: ['clientId', 'clientSecret'],
         connectionStatus: 'disconnected',
     },
-    {
-        id: 'onedrive',
-        name: 'Microsoft OneDrive',
-        description: 'Access and share educational resources through OneDrive for Education.',
-        icon: <FolderOpen className="w-6 h-6" />,
-        iconBg: 'bg-blue-100',
-        iconColor: 'text-blue-600',
-        url: 'onedrive.live.com',
-        category: 'storage',
-        enabled: false,
-        configFields: ['clientId', 'clientSecret'],
-        connectionStatus: 'disconnected',
-    },
 
     // Analytics
     {

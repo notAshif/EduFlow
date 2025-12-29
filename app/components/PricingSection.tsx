@@ -73,8 +73,12 @@ const pricingTiers: PricingTier[] = [
     },
 ];
 
+import { SubscriptionModal } from "./SubscriptionModal";
+
 export function PricingSection() {
     const [isAnnual, setIsAnnual] = React.useState(false);
+    const [selectedPlan, setSelectedPlan] = React.useState<{ name: string; price: number; interval: string } | null>(null);
+    const [isModalOpen, setIsModalOpen] = React.useState(false);
 
     const calculateSavings = (monthly: number, annual: number) => {
         const monthlyCost = monthly * 12;
@@ -83,20 +87,35 @@ export function PricingSection() {
         return savings;
     };
 
+    const handlePlanSelect = (tier: PricingTier, price: number) => {
+        setSelectedPlan({
+            name: tier.name,
+            price: price,
+            interval: isAnnual ? "year" : "month"
+        });
+        setIsModalOpen(true);
+    };
+
     return (
         <section id="pricing" className="py-24 px-4 sm:px-6 lg:px-8 bg-muted/30">
             <div className="max-w-7xl mx-auto">
+                <SubscriptionModal
+                    isOpen={isModalOpen}
+                    onClose={() => setIsModalOpen(false)}
+                    plan={selectedPlan}
+                />
+
                 {/* Header */}
                 <div className="text-center mb-12">
                     <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-                        Choose Your Practice
+                        Choose Your Plan
                     </h2>
                     <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
                         Start with a 14-day free trial. No credit card required.
                     </p>
 
                     {/* Billing Toggle */}
-                    <div className="inline-flex items-center gap-3 p-1 bg-muted rounded-xl">
+                    <div className="inline-flex items-center p-1.5 bg-muted/50 rounded-full border border-border/50 backdrop-blur-sm">
                         <CoconutToggle
                             pressed={!isAnnual}
                             onClick={() => setIsAnnual(false)}
@@ -126,7 +145,7 @@ export function PricingSection() {
                         return (
                             <CoconutCard
                                 key={tier.name}
-                                className={tier.highlighted ? "ring-2 ring-primary shadow-xl scale-105" : ""}
+                                className={tier.highlighted ? "ring-2 ring-primary shadow-xl scale-105 relative z-10" : ""}
                             >
                                 <CoconutCardHeader>
                                     <div className="flex items-center justify-between mb-2">
@@ -146,7 +165,7 @@ export function PricingSection() {
                                         </div>
                                         {isAnnual && (
                                             <p className="text-sm text-green-600 dark:text-green-400 mt-1">
-                                                Save {savings}% • Billed annually at ${price * 12}
+                                                Save {savings}% • Billed annually as ${price * 12}
                                             </p>
                                         )}
                                     </div>
@@ -155,6 +174,7 @@ export function PricingSection() {
                                         className="w-full mb-6"
                                         variant={tier.highlighted ? "default" : "outline"}
                                         size="lg"
+                                        onClick={() => handlePlanSelect(tier, price)}
                                     >
                                         {tier.ctaText}
                                     </Button>

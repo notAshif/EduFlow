@@ -244,11 +244,12 @@ export class WorkflowExecutor {
   ): Promise<Record<string, any> | null> {
     console.log(`[Executor] Getting credentials for ${nodeType} in org ${organizationId}`);
 
-    const integrationMap: Record<string, string> = {
+    const integrationMap: Record<string, string | string[]> = {
       // Twilio
       'twilio-sms': 'twilio',
       'twilio-whatsapp': 'twilio',
       'whatsapp-group': 'twilio',
+      'alert-send': ['twilio', 'gmail', 'slack', 'discord'],
       // Email
       'email-send': 'gmail',
       // Chat
@@ -276,74 +277,76 @@ export class WorkflowExecutor {
       'ai-sentiment': 'openai',
       'local-ai': 'openai',
       'local-search': 'openai',
+      // Education
+      'attendance-track': 'twilio',
+      'condition': [],
     };
 
-    const integrationType = integrationMap[nodeType];
-    if (!integrationType) {
+    const integrationTypes = integrationMap[nodeType];
+    if (!integrationTypes) {
       console.log(`[Executor] No integration mapping for ${nodeType}`);
       return null;
     }
 
-    try {
-      // First, try to get credentials from the integration connection in DB
-      const connection = await prisma.integrationConnection.findFirst({
-        where: { organizationId, type: integrationType },
-      });
+    const types = Array.isArray(integrationTypes) ? integrationTypes : [integrationTypes];
+    let allCredentials: Record<string, any> = {};
 
-      let credentials = (connection?.credentials as any) ?? {};
-      if (connection) {
-        console.log(`[Executor] Found DB credentials for ${integrationType}`);
-      }
+    for (const type of types) {
+      try {
+        // First, try to get credentials from the integration connection in DB
+        const connection = await prisma.integrationConnection.findFirst({
+          where: { organizationId, type: type as any },
+        });
 
-      // For Google services, try to get OAuth token from Clerk
-      const isGoogleService = nodeType.startsWith('google-');
-      const isMicrosoftService = nodeType.startsWith('microsoft-');
-
-      if (isGoogleService || isMicrosoftService) {
-        // Find the specific user if userId is provided, otherwise find any user in this organization
-        const orgUser = userId
-          ? await prisma.user.findFirst({ where: { clerkId: userId } })
-          : await prisma.user.findFirst({
-            where: { organizationId },
-            select: { clerkId: true, email: true },
-          });
-
-        if (orgUser?.clerkId) {
-          console.log(`[Executor] Attempting to fetch OAuth token for ${orgUser.email || orgUser.clerkId} (${orgUser.clerkId})`);
-          try {
-            const oauthTokens = await getOAuthTokens(orgUser.clerkId);
-
-            if (isGoogleService && oauthTokens.google) {
-              console.log(`[Executor] Successfully got Google OAuth token from Clerk`);
-              credentials = {
-                ...credentials,
-                accessToken: oauthTokens.google,
-              };
-            } else if (isGoogleService) {
-              console.warn(`[Executor] No Google OAuth token returned from Clerk for user ${orgUser.clerkId}`);
-            }
-
-            if (isMicrosoftService && oauthTokens.microsoft) {
-              console.log(`[Executor] Successfully got Microsoft OAuth token from Clerk`);
-              credentials = {
-                ...credentials,
-                accessToken: oauthTokens.microsoft,
-              };
-            }
-          } catch (oauthError) {
-            console.warn('[Executor] Error calling getOAuthTokens:', oauthError);
-          }
-        } else {
-          console.warn(`[Executor] No user found with clerkId in organization ${organizationId}`);
+        let credentials = (connection?.credentials as any) ?? {};
+        if (connection) {
+          console.log(`[Executor] Found DB credentials for ${type}`);
         }
-      }
 
-      const hasCreds = Object.keys(credentials).length > 0;
-      console.log(`[Executor] Returning credentials: ${hasCreds ? 'Yes' : 'No'}`);
-      return hasCreds ? credentials : null;
-    } catch (error) {
-      console.error('Error fetching integration credentials:', error);
-      return null;
+        // For Google/Microsoft services, try to get OAuth token from Clerk
+        const isGoogleType = type.startsWith('google-') || type === 'gmail';
+        const isMicrosoftType = type === 'microsoft' || type === 'onedrive';
+
+        if (isGoogleType || isMicrosoftType) {
+          // Find the specific user if userId is provided, otherwise find any user in this organization
+          const orgUser = userId
+            ? await prisma.user.findFirst({ where: { clerkId: userId } })
+            : await prisma.user.findFirst({
+              where: { organizationId },
+              select: { clerkId: true, email: true },
+            });
+
+          if (orgUser?.clerkId) {
+            try {
+              const oauthTokens = await getOAuthTokens(orgUser.clerkId);
+
+              if (isGoogleType && oauthTokens.google) {
+                credentials = {
+                  ...credentials,
+                  accessToken: oauthTokens.google,
+                };
+              }
+
+              if (isMicrosoftType && oauthTokens.microsoft) {
+                credentials = {
+                  ...credentials,
+                  accessToken: oauthTokens.microsoft,
+                };
+              }
+            } catch (error) {
+              console.error(`[Executor] Failed to fetch OAuth token for ${type}:`, error);
+            }
+          }
+        }
+
+        allCredentials = { ...allCredentials, ...credentials };
+      } catch (error) {
+        console.error(`[Executor] Error fetching credentials for ${type}:`, error);
+      }
     }
+
+    const hasCreds = Object.keys(allCredentials).length > 0;
+    console.log(`[Executor] Returning credentials for ${nodeType}: ${hasCreds ? 'Yes' : 'No'}`);
+    return hasCreds ? allCredentials : null;
   }
 }

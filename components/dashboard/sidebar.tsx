@@ -84,20 +84,20 @@ export function Sidebar({ mobile }: SidebarProps) {
         </nav>
       </ScrollArea>
 
-      {/* Footer / Upgrade Card */}
+      {/* Footer / Pro Plan Active Card */}
       <div className="p-4 border-t border-border/50">
-        <div className="bg-gradient-to-br from-primary/10 to-blue-500/10 rounded-xl p-4 border border-primary/10">
+        <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 rounded-xl p-4 border border-green-500/20">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-background rounded-lg shadow-sm">
-              <Zap className="w-4 h-4 text-primary" />
+              <Zap className="w-4 h-4 text-green-500" />
             </div>
             <div>
-              <p className="text-sm font-semibold">Pro Plan</p>
-              <p className="text-xs text-muted-foreground">Upgrade for more</p>
+              <p className="text-sm font-semibold text-green-600 dark:text-green-400">Pro Plan</p>
+              <p className="text-xs text-muted-foreground">Working properly</p>
             </div>
           </div>
-          <Button size="sm" className="w-full mt-2" variant="default">
-            Upgrade Now
+          <Button size="sm" className="w-full mt-2 bg-green-600 hover:bg-green-700" variant="default" disabled>
+            ✓ Active
           </Button>
         </div>
       </div>

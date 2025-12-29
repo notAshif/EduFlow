@@ -39,6 +39,7 @@ export enum NodeType {
 
   // Communication
   TELEGRAM_SEND = "telegram-send",
+  REMINDER = "reminder",
 
   // Video & Meetings
   ZOOM_MEETING = "zoom-meeting",

@@ -123,12 +123,45 @@ export async function POST(request: NextRequest) {
 
             case 'get-groups':
                 // List all groups
-                const groups = await service.getGroups();
-                return NextResponse.json({
-                    ok: true,
-                    groups,
-                    count: groups.length
-                });        
+                try {
+                    const groups = await service.getGroups();
+                    return NextResponse.json({
+                        ok: true,
+                        groups,
+                        count: groups.length
+                    });
+                } catch (err: any) {
+                    if (err.message?.includes('not ready')) {
+                        return NextResponse.json({
+                            ok: false,
+                            error: 'WhatsApp Web is not connected.',
+                            groups: [],
+                            count: 0
+                        });
+                    }
+                    throw err;
+                }
+
+            case 'get-chats':
+                // List all chats (individuals and groups)
+                try {
+                    const chatsList = await service.getChatsList();
+                    return NextResponse.json({
+                        ok: true,
+                        chats: chatsList,
+                        count: chatsList.length
+                    });
+                } catch (err: any) {
+                    if (err.message?.includes('not ready')) {
+                        return NextResponse.json({
+                            ok: false,
+                            error: 'WhatsApp Web is not connected.',
+                            chats: [],
+                            count: 0
+                        });
+                    }
+                    throw err;
+                }
 
             case 'status':
                 // Just get status

@@ -15,6 +15,7 @@ import { Footer } from "@/app/components/Footer";
 import { TextEffect } from "@/app/components/TextEffect";
 import { PricingSection } from "@/app/components/PricingSection";
 import { FeatureBentoGrid } from "@/app/components/FeatureBentoGrid";
+import { InteractiveDemo } from "@/app/components/InteractiveDemo";
 import { SignedIn, SignedOut } from "@clerk/nextjs";
 
 export default function Home() {
@@ -76,15 +77,9 @@ export default function Home() {
             </div>
 
             {/* Hero Image / Preview */}
-            <div className="mt-16 relative mx-auto max-w-5xl">
-              <div className="rounded-xl border border-border bg-card/50 backdrop-blur-sm shadow-2xl overflow-hidden aspect-video flex items-center justify-center group">
-                <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 to-blue-500/5" />
-                <div className="text-center p-8">
-                  <div className="w-20 h-20 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-500">
-                    <Play className="w-10 h-10 text-primary ml-1" />
-                  </div>
-                  <p className="text-muted-foreground font-medium">Interactive Demo Preview</p>
-                </div>
+            <div className="mt-16 relative mx-auto max-w-5xl h-[500px]">
+              <div className="rounded-2xl border border-border/50 bg-card/30 backdrop-blur-xl shadow-2xl overflow-hidden h-full">
+                <InteractiveDemo />
               </div>
             </div>
           </div>

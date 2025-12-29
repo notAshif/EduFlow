@@ -16,6 +16,8 @@ import { AlertSendNode } from './AlertSendNode';
 import { AttendanceTrackNode } from './AttendanceTrackNode';
 import { AssignmentCreateNode } from './AssignmentCreateNode';
 import { ScheduleCheckNode } from './ScheduleCheckNode';
+import { ReminderNode } from './ReminderNode';
+import { ReportGenerateNode } from './ReportGenerateNode';
 import { GenericNode } from './GenericNode';
 
 export function createNodeInstance(type: NodeType | string, config: Record<string, any> = {}): BaseNode {
@@ -69,6 +71,9 @@ export function createNodeInstance(type: NodeType | string, config: Record<strin
         case NodeType.SCHEDULE_CHECK:
         case 'schedule-check':
             return new ScheduleCheckNode(config);
+        case NodeType.REMINDER:
+        case 'reminder':
+            return new ReminderNode(config);
 
         // Triggers - return generic with trigger behavior
         case NodeType.TRIGGER_SCHEDULE:
@@ -163,8 +168,7 @@ export function createNodeInstance(type: NodeType | string, config: Record<strin
                 'Quiz ready', { title: config.title, questions: config.questions?.length || 0 });
         case NodeType.REPORT_GENERATE:
         case 'report-generate':
-            return new GenericNode(config, 'report-generate', 'Report Generated',
-                'Report ready', { type: config.reportType });
+            return new ReportGenerateNode(config);
 
         // AI & Analytics
         case NodeType.AI_SUMMARIZE:
@@ -251,26 +255,26 @@ export function getAllNodeTypes(): { type: NodeType; label: string; description:
         },
         {
             type: NodeType.TWILIO_SMS,
-            label: 'Send SMS',
-            description: 'Send SMS messages via Twilio',
+            label: 'Send SMS (Legacy)',
+            description: 'Send SMS messages (Deprecated - use WhatsApp)',
             category: 'Communication'
         },
         {
             type: NodeType.TWILIO_WHATSAPP,
-            label: 'Send WhatsApp',
-            description: 'Send WhatsApp messages via Twilio',
+            label: 'Send WhatsApp (Legacy)',
+            description: 'Send WhatsApp via Twilio (Deprecated - use WhatsApp Messenger)',
             category: 'Communication'
         },
         {
             type: NodeType.WHATSAPP_GROUP,
-            label: 'WhatsApp Group Alert',
-            description: 'Send messages to WhatsApp groups',
+            label: 'WhatsApp Messenger',
+            description: 'Send messages to WhatsApp contacts and groups using WhatsApp Web',
             category: 'Communication'
         },
         {
             type: NodeType.ALERT_SEND,
             label: 'Multi-Channel Alert',
-            description: 'Send alerts via WhatsApp, Email, and SMS',
+            description: 'Send alerts via WhatsApp Web, Email, and Slack/Discord',
             category: 'Communication'
         },
         {
@@ -289,6 +293,12 @@ export function getAllNodeTypes(): { type: NodeType; label: string; description:
             type: NodeType.EMAIL_SEND,
             label: 'Send Email',
             description: 'Send emails via SMTP',
+            category: 'Communication'
+        },
+        {
+            type: NodeType.REMINDER,
+            label: 'Reminder',
+            description: 'Schedule and send reminders via WhatsApp or Email',
             category: 'Communication'
         },
         {

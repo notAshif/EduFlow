@@ -11,7 +11,7 @@ export const CoconutCard = React.forwardRef<
     <div
         ref={ref}
         className={cn(
-            "rounded-2xl border border-border bg-card text-card-foreground shadow-sm transition-all",
+            "rounded-[2rem] border border-border/50 bg-card/50 backdrop-blur-sm text-card-foreground shadow-sm transition-all duration-300 hover:shadow-xl hover:border-primary/20",
             className
         )}
         {...props}
@@ -25,7 +25,7 @@ export const CoconutCardHeader = React.forwardRef<
 >(({ className, ...props }, ref) => (
     <div
         ref={ref}
-        className={cn("flex flex-col space-y-1.5 p-6", className)}
+        className={cn("flex flex-col space-y-2 p-8 pb-4", className)}
         {...props}
     />
 ));
@@ -37,7 +37,7 @@ export const CoconutCardTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
     <h3
         ref={ref}
-        className={cn("text-2xl font-semibold leading-none tracking-tight", className)}
+        className={cn("text-3xl font-bold leading-none tracking-tight", className)}
         {...props}
     />
 ));
@@ -47,7 +47,7 @@ export const CoconutCardContent = React.forwardRef<
     HTMLDivElement,
     React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("p-6 pt-0", className)} {...props} />
+    <div ref={ref} className={cn("p-8 pt-4", className)} {...props} />
 ));
 CoconutCardContent.displayName = "CoconutCardContent";
 
@@ -56,16 +56,16 @@ export const CoconutBadge = React.forwardRef<
     React.HTMLAttributes<HTMLDivElement> & { variant?: "default" | "success" | "warning" }
 >(({ className, variant = "default", ...props }, ref) => {
     const variants = {
-        default: "bg-primary/10 text-primary",
-        success: "bg-green-500/10 text-green-600 dark:text-green-400",
-        warning: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
+        default: "bg-muted text-foreground font-bold border border-border/50",
+        success: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-bold",
+        warning: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 font-bold",
     };
 
     return (
         <div
             ref={ref}
             className={cn(
-                "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors",
+                "inline-flex items-center rounded-full px-3 py-1 text-[10px] uppercase tracking-wider transition-colors shadow-sm",
                 variants[variant],
                 className
             )}
@@ -85,10 +85,10 @@ export const CoconutToggle = React.forwardRef<
         aria-checked={pressed}
         data-state={pressed ? "on" : "off"}
         className={cn(
-            "inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-all",
-            "hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            pressed && "bg-primary text-primary-foreground",
-            !pressed && "bg-muted/50 text-muted-foreground",
+            "inline-flex items-center justify-center rounded-full px-6 py-2.5 text-xs font-bold transition-all duration-300",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            pressed && "bg-[#0b1221] text-white shadow-lg",
+            !pressed && "text-muted-foreground hover:bg-muted",
             className
         )}
         {...props}

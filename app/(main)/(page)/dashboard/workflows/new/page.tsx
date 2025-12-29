@@ -58,6 +58,7 @@ import {
   GraduationCap,
   BarChart3,
   FolderOpen,
+  PenTool,
   Link2,
   Bot,
   Sparkles,
@@ -82,7 +83,11 @@ import {
   PieChart,
   TrendingUp,
   RefreshCw,
-  FileSpreadsheet
+  FileSpreadsheet,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  Activity
 } from "lucide-react";
 import Link from "next/link";
 import { Textarea } from "@/components/ui/textarea";
@@ -138,11 +143,16 @@ const CustomNode = ({ data, selected }: { data: any; selected: boolean }) => {
       "google-meet": Video,
       "google-forms": FormInput,
       "google-slides": Presentation,
-      // Microsoft
-      "microsoft-teams": Users,
-      "microsoft-outlook": Mail,
-      "microsoft-onedrive": Cloud,
-      "microsoft-excel": Table,
+      // LMS Platforms
+      "moodle": GraduationCap,
+      "canvas-lms": BookOpen,
+      "schoology": BookOpen,
+      // Grading & Assessment
+      "turnitin": ClipboardCheck,
+      "gradescope": PenTool,
+      "kahoot": Brain,
+      // Analytics
+      "power-bi": BarChart3,
       // Triggers
       "trigger-schedule": Timer,
       "trigger-webhook": Webhook,
@@ -181,39 +191,51 @@ const CustomNode = ({ data, selected }: { data: any; selected: boolean }) => {
   };
 
   const getNodeColor = (type: string) => {
-    // Google - Google colors
-    if (type.startsWith('google-')) return 'bg-gradient-to-br from-blue-500 to-green-500';
-    // Microsoft - Blue
-    if (type.startsWith('microsoft-')) return 'bg-blue-600';
-    // Triggers - Purple gradient
-    if (type.startsWith('trigger-')) return 'bg-gradient-to-br from-purple-500 to-pink-500';
-    // AI - Purple
-    if (type.startsWith('ai-') || type === 'local-ai') return 'bg-purple-500';
-    // Communication - Blue
-    if (type.includes('send') || type.includes('alert') || type.includes('notify')) return 'bg-blue-500';
-    // Education - Green
-    if (type.includes('check') || type.includes('track') || type.includes('grade') || type.includes('classroom') || type.includes('quiz')) return 'bg-green-500';
-    // Data - Cyan
-    if (type.includes('database') || type.includes('spreadsheet') || type.includes('json')) return 'bg-cyan-500';
-    // Logic - Orange
-    if (type === 'condition' || type === 'loop' || type === 'split' || type === 'merge' || type === 'filter') return 'bg-orange-500';
-    // Time - Yellow
-    if (type === 'delay') return 'bg-yellow-500';
-    // Video - Red
-    if (type.includes('zoom') || type.includes('meet') || type.includes('video')) return 'bg-red-500';
-    return 'bg-primary';
+    // Specific Google Apps Branding
+    if (type === 'google-sheets' || type === 'spreadsheet-update') return 'bg-gradient-to-br from-green-500 to-emerald-600 shadow-green-500/20';
+    if (type === 'google-calendar' || type === 'schedule-check') return 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/20';
+    if (type === 'google-drive' || type === 'file-upload' || type === 'file-read') return 'bg-gradient-to-br from-yellow-400 to-orange-500 shadow-yellow-500/20';
+    if (type === 'google-forms' || type === 'trigger-form') return 'bg-gradient-to-br from-purple-500 to-violet-600 shadow-purple-500/20';
+    if (type === 'google-meet' || type === 'zoom-meeting') return 'bg-gradient-to-br from-emerald-400 to-teal-600 shadow-emerald-500/20';
+    if (type === 'google-classroom') return 'bg-gradient-to-br from-green-600 to-green-800 shadow-green-600/20';
+
+    // Google - General
+    if (type.startsWith('google-')) return 'bg-gradient-to-br from-blue-500 via-green-500 to-yellow-500 shadow-blue-500/20';
+    // Triggers
+    if (type.startsWith('trigger-')) return 'bg-gradient-to-br from-fuchsia-500 to-pink-600 shadow-fuchsia-500/20';
+    // AI
+    if (type.startsWith('ai-') || type === 'local-ai') return 'bg-gradient-to-br from-violet-600 to-indigo-700 shadow-violet-600/20';
+    // Communication
+    if (type.includes('send') || type.includes('alert') || type.includes('notify') || type.includes('whatsapp')) return 'bg-gradient-to-br from-sky-500 to-blue-700 shadow-sky-500/20';
+    // Education
+    if (type.includes('track') || type.includes('grade') || type.includes('classroom') || type.includes('quiz')) return 'bg-gradient-to-br from-emerald-500 to-green-700 shadow-emerald-500/20';
+    // Data
+    if (type.includes('database') || type.includes('json')) return 'bg-gradient-to-br from-cyan-500 to-blue-600 shadow-cyan-500/20';
+    // Logic
+    if (type === 'condition' || type === 'loop' || type === 'split' || type === 'merge' || type === 'filter') return 'bg-gradient-to-br from-orange-400 to-red-500 shadow-orange-500/20';
+    // Time
+    if (type === 'delay') return 'bg-gradient-to-br from-amber-400 to-yellow-600 shadow-amber-500/20';
+
+    // LMS Platforms
+    if (type === 'moodle' || type === 'canvas-lms' || type === 'schoology') return 'bg-gradient-to-br from-orange-500 to-amber-600 shadow-orange-500/20';
+    // Grading & Assessment
+    if (type === 'turnitin' || type === 'gradescope' || type === 'kahoot') return 'bg-gradient-to-br from-teal-500 to-emerald-600 shadow-teal-500/20';
+    // Analytics
+    if (type === 'power-bi') return 'bg-gradient-to-br from-yellow-400 to-orange-500 shadow-yellow-500/20';
+
+    return 'bg-primary shadow-primary/20';
   };
 
   // Get border color based on status
   const getBorderClass = () => {
-    if (selected) return 'border-primary ring-2 ring-primary/20';
+    if (selected) return 'border-primary ring-4 ring-primary/10 scale-[1.02] z-10';
     switch (status) {
       case 'running': return 'border-blue-500 ring-2 ring-blue-500/20 animate-pulse';
       case 'success': return 'border-green-500 ring-2 ring-green-500/20';
       case 'error': return 'border-red-500 ring-2 ring-red-500/20';
       case 'warning': return 'border-yellow-500 ring-2 ring-yellow-500/20';
       case 'missing-integration': return 'border-orange-500 ring-2 ring-orange-500/20 border-dashed';
-      default: return 'border-border';
+      default: return 'border-border hover:border-muted-foreground/50';
     }
   };
 
@@ -222,36 +244,32 @@ const CustomNode = ({ data, selected }: { data: any; selected: boolean }) => {
     switch (status) {
       case 'running':
         return (
-          <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center animate-spin">
-            <div className="w-2 h-2 border-2 border-white border-t-transparent rounded-full" />
+          <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-blue-500 border-2 border-background shadow-lg flex items-center justify-center animate-spin">
+            <div className="w-2.5 h-2.5 border-2 border-white border-t-transparent rounded-full" />
           </div>
         );
       case 'success':
         return (
-          <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
-            <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-            </svg>
+          <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-green-500 border-2 border-background shadow-lg flex items-center justify-center">
+            <CheckCircle2 className="w-3 h-3 text-white" />
           </div>
         );
       case 'error':
         return (
-          <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 flex items-center justify-center" title={errorMessage}>
-            <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+          <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 border-2 border-background shadow-lg flex items-center justify-center" title={errorMessage}>
+            <XCircle className="w-3 h-3 text-white" />
           </div>
         );
       case 'warning':
         return (
-          <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-yellow-500 flex items-center justify-center">
-            <span className="text-white text-[10px] font-bold">!</span>
+          <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-yellow-500 border-2 border-background shadow-lg flex items-center justify-center">
+            <AlertCircle className="w-3 h-3 text-white" />
           </div>
         );
       case 'missing-integration':
         return (
-          <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-orange-500 flex items-center justify-center" title="Integration not configured">
-            <Link2 className="w-2.5 h-2.5 text-white" />
+          <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-orange-500 border-2 border-background shadow-lg flex items-center justify-center" title="Integration not configured">
+            <Link2 className="w-3 h-3 text-white" />
           </div>
         );
       default:
@@ -259,9 +277,29 @@ const CustomNode = ({ data, selected }: { data: any; selected: boolean }) => {
     }
   };
 
+  const getResourceInfo = () => {
+    if (!data.config) return null;
+
+    const info = data.config.formName ||
+      data.config.spreadsheetName ||
+      data.config.sheetName ||
+      data.config.calendarName ||
+      data.config.formId ||
+      data.config.courseName ||
+      data.config.action?.replace(/_/g, ' ');
+
+    if (!info) return null;
+
+    return (
+      <div className="mt-1.5 px-2 py-0.5 rounded bg-muted/50 text-[9px] font-medium text-muted-foreground uppercase tracking-tight truncate border border-border/30 inline-block max-w-[140px]">
+        {String(info).length > 25 ? String(info).slice(0, 22) + '...' : info}
+      </div>
+    );
+  };
+
   return (
     <div
-      className={`relative group min-w-[240px] rounded-xl bg-card border-2 transition-all duration-200 shadow-sm hover:shadow-md ${getBorderClass()}`}
+      className={`relative group min-w-[260px] rounded-2xl bg-card/80 backdrop-blur-md border-[1.5px] transition-all duration-300 shadow-sm hover:shadow-xl ${getBorderClass()}`}
     >
       {/* Status Indicator */}
       {getStatusIndicator()}
@@ -270,48 +308,48 @@ const CustomNode = ({ data, selected }: { data: any; selected: boolean }) => {
       <Handle
         type="target"
         position={Position.Left}
-        className="!w-3 !h-3 !bg-muted-foreground !border-2 !border-background transition-colors group-hover:!bg-primary"
+        className="!w-4 !h-4 !bg-background !border-2 !border-muted-foreground/30 !-left-2 transition-all group-hover:!bg-primary group-hover:!border-primary group-hover:!scale-125"
       />
 
-      <div className="flex items-center p-3 gap-3">
+      <div className="flex items-center p-3.5 gap-4">
         {/* Icon Box */}
-        <div className={`p-2.5 rounded-lg shadow-sm ${getNodeColor(data.nodeType)}`}>
+        <div className={`p-3 rounded-xl shadow-lg transition-transform duration-300 group-hover:scale-110 ${getNodeColor(data.nodeType)}`}>
           {getNodeIcon(data.nodeType)}
         </div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          <div className="font-semibold text-sm truncate text-card-foreground">
+          <div className="font-bold text-sm truncate text-card-foreground tracking-tight">
             {data.label}
           </div>
-          <div className="text-xs text-muted-foreground truncate">
+          <div className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-widest flex items-center gap-1.5">
+            <Zap className="w-2.5 h-2.5 text-primary/40" />
             {data.nodeType.replace(/-/g, ' ')}
           </div>
+
+          {getResourceInfo()}
+
           {/* Show error message if exists */}
           {status === 'error' && errorMessage && (
-            <div className="text-xs text-red-500 truncate mt-0.5" title={errorMessage}>
+            <div className="text-[10px] text-red-500/80 font-medium truncate mt-1 flex items-center gap-1" title={errorMessage}>
+              <XCircle className="w-2.5 h-2.5" />
               {errorMessage.slice(0, 30)}...
             </div>
           )}
           {/* Show missing integration warning */}
           {!hasIntegration && (
-            <div className="text-xs text-orange-500 truncate mt-0.5">
-              ⚠️ Integration needed
+            <div className="text-[10px] text-orange-500 font-bold truncate mt-1 flex items-center gap-1">
+              <Link2 className="w-2.5 h-2.5" />
+              Integration Required
             </div>
           )}
         </div>
-
-        {/* Config Status Indicator */}
-        {data.config && Object.keys(data.config).length > 0 && status === 'idle' && hasIntegration && (
-          <div className="w-2 h-2 rounded-full bg-green-500" title="Configured" />
-        )}
       </div>
-
       {/* Output Handle */}
       <Handle
         type="source"
         position={Position.Right}
-        className="!w-3 !h-3 !bg-muted-foreground !border-2 !border-background transition-colors group-hover:!bg-primary"
+        className="!w-4 !h-4 !bg-background !border-2 !border-muted-foreground/30 !-right-2 transition-all group-hover:!bg-primary group-hover:!border-primary group-hover:!scale-125"
       />
     </div>
   );
@@ -342,12 +380,11 @@ const nodePalette = [
     ]
   },
   {
-    category: "Microsoft 365",
+    category: "LMS Platforms",
     items: [
-      { type: "microsoft-teams", label: "Microsoft Teams", icon: Users, description: "Team messaging" },
-      { type: "microsoft-outlook", label: "Outlook Email", icon: Mail, description: "Send emails" },
-      { type: "microsoft-onedrive", label: "OneDrive", icon: Cloud, description: "Cloud storage" },
-      { type: "microsoft-excel", label: "Excel Online", icon: Table, description: "Spreadsheets" },
+      { type: "moodle", label: "Moodle", icon: GraduationCap, description: "Learning management" },
+      { type: "canvas-lms", label: "Canvas LMS", icon: BookOpen, description: "Course management" },
+      { type: "schoology", label: "Schoology", icon: BookOpen, description: "School management" },
     ]
   },
   {
@@ -359,7 +396,6 @@ const nodePalette = [
       { type: "email-send", label: "Send Email", icon: Mail, description: "Via SMTP" },
       { type: "slack-send", label: "Slack Message", icon: Slack, description: "Post to channel" },
       { type: "discord-send", label: "Discord Message", icon: MessageCircle, description: "Send to Discord" },
-      { type: "telegram-send", label: "Telegram Message", icon: Send, description: "Send via Telegram" },
     ]
   },
   {
@@ -382,8 +418,17 @@ const nodePalette = [
     ]
   },
   {
+    category: "Grading & Assessment",
+    items: [
+      { type: "turnitin", label: "Turnitin", icon: ClipboardCheck, description: "Plagiarism check" },
+      { type: "gradescope", label: "Gradescope", icon: PenTool, description: "AI-assisted grading" },
+      { type: "kahoot", label: "Kahoot!", icon: Brain, description: "Quiz results" },
+    ]
+  },
+  {
     category: "AI & Analytics",
     items: [
+      { type: "power-bi", label: "Power BI", icon: BarChart3, description: "Data visualization" },
       { type: "local-ai", label: "AI Analysis", icon: Brain, description: "Analyze content" },
       { type: "ai-summarize", label: "AI Summarize", icon: Sparkles, description: "Summarize text" },
       { type: "ai-translate", label: "AI Translate", icon: Globe, description: "Language translation" },
@@ -470,15 +515,23 @@ export default function NewWorkflowPage() {
         case "google-forms":
           return { formId: "", action: "get-responses" };
 
-        // Microsoft
-        case "microsoft-teams":
-          return { channelId: "", message: "", teamId: "" };
-        case "microsoft-outlook":
-          return { to: "", subject: "", body: "", importance: "normal" };
-        case "microsoft-onedrive":
-          return { action: "list", folderId: "", fileName: "" };
-        case "microsoft-excel":
-          return { workbookId: "", sheetName: "Sheet1", range: "A1:Z100", action: "read" };
+        // LMS Platforms
+        case "moodle":
+        case "canvas-lms":
+        case "schoology":
+          return { action: "list-courses", courseId: "", apiKey: "" };
+
+        // Grading & Assessment
+        case "turnitin":
+          return { action: "check-plagiarism", submissionId: "", apiKey: "" };
+        case "gradescope":
+          return { action: "grade-submission", submissionId: "", apiKey: "" };
+        case "kahoot":
+          return { action: "get-results", quizId: "", apiKey: "" };
+
+        // Analytics
+        case "power-bi":
+          return { action: "refresh-dataset", datasetId: "", apiKey: "" };
 
         // Communication
         case "whatsapp-group":
@@ -507,8 +560,6 @@ export default function NewWorkflowPage() {
           return { channel: "#general", message: "", username: "EduFlow Bot" };
         case "discord-send":
           return { webhookUrl: "", message: "", username: "EduFlow Bot" };
-        case "telegram-send":
-          return { chatId: "", message: "", parseMode: "HTML" };
 
         // Video & Meetings
         case "zoom-meeting":
@@ -916,6 +967,12 @@ function NodePropertiesPanel({
       requestAnimationFrame(() => {
         onUpdate(newConfig);
       });
+
+      // Auto-fetch responses when formId changes
+      if (key === 'formId' && value && (node.data.nodeType === 'google-forms' || node.data.nodeType === 'trigger-form')) {
+        fetchRecentResponses(value);
+      }
+
       return newConfig;
     });
   };
@@ -950,6 +1007,9 @@ function NodePropertiesPanel({
   // Google Forms specific states
   const [recentForms, setRecentForms] = useState<any[]>([]);
   const [isFetchingForms, setIsFetchingForms] = useState(false);
+  const [recentResponses, setRecentResponses] = useState<any[]>([]);
+  const [formQuestions, setFormQuestions] = useState<Record<string, string>>({});
+  const [isFetchingResponses, setIsFetchingResponses] = useState(false);
 
   const fetchClassroomMetadata = useCallback(async () => {
     setIsFetchingCourses(true);
@@ -1046,6 +1106,23 @@ function NodePropertiesPanel({
     }
   }, []);
 
+  const fetchRecentResponses = useCallback(async (formId: string) => {
+    if (!formId || formId.includes('/d/')) return;
+    setIsFetchingResponses(true);
+    try {
+      const res = await fetch(`/api/integrations/google/forms/responses?formId=${encodeURIComponent(formId)}`);
+      const data = await res.json();
+      if (data.responses) {
+        setRecentResponses(data.responses);
+        setFormQuestions(data.questions || {});
+      }
+    } catch (error) {
+      console.error("Failed to fetch recent responses:", error);
+    } finally {
+      setIsFetchingResponses(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (node.data.nodeType === 'google-sheets') {
       fetchRecentSheets();
@@ -1062,10 +1139,13 @@ function NodePropertiesPanel({
         fetchRecentEvents(config.calendarId);
       }
     }
-    if (node.data.nodeType === 'google-forms') {
+    if (node.data.nodeType === 'google-forms' || node.data.nodeType === 'trigger-form') {
       fetchRecentForms();
+      if (config.formId) {
+        fetchRecentResponses(config.formId);
+      }
     }
-  }, [node.data.nodeType, fetchClassroomMetadata, fetchRecentSheets, fetchRecentDriveFiles, fetchRecentCalendars, fetchRecentEvents, fetchRecentForms, config.calendarId]);
+  }, [node.data.nodeType, fetchClassroomMetadata, fetchRecentSheets, fetchRecentDriveFiles, fetchRecentCalendars, fetchRecentEvents, fetchRecentForms, fetchRecentResponses, config.calendarId, config.formId]);
 
   const fetchSheetMetadata = useCallback(async (id: string) => {
     if (!id || id === '' || id === 'auto') {
@@ -1650,10 +1730,13 @@ function NodePropertiesPanel({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="equals">Equals</SelectItem>
-                  <SelectItem value="not_equals">Not Equals</SelectItem>
+                  <SelectItem value="not-equals">Not Equals</SelectItem>
                   <SelectItem value="contains">Contains</SelectItem>
-                  <SelectItem value="greater_than">Greater Than</SelectItem>
-                  <SelectItem value="less_than">Less Than</SelectItem>
+                  <SelectItem value="not-contains">Not Contains</SelectItem>
+                  <SelectItem value="greater-than">Greater Than</SelectItem>
+                  <SelectItem value="less-than">Less Than</SelectItem>
+                  <SelectItem value="exists">Exists</SelectItem>
+                  <SelectItem value="not-exists">Not Exists</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1816,14 +1899,166 @@ function NodePropertiesPanel({
         );
       case "trigger-form":
         return (
-          <div className="space-y-2">
-            <Label htmlFor="formId">Form ID</Label>
-            <Input
-              id="formId"
-              placeholder="form-123"
-              value={config.formId || ""}
-              onChange={(e) => handleConfigChange("formId", e.target.value)}
-            />
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="formId">Google Form</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="formId"
+                  placeholder="Paste Form ID or URL..."
+                  value={config.formId || ""}
+                  onChange={(e) => handleConfigChange("formId", e.target.value)}
+                  className="flex-1"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={fetchRecentForms}
+                  disabled={isFetchingForms}
+                  title="Reload Forms"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isFetchingForms ? 'animate-spin' : ''}`} />
+                </Button>
+              </div>
+
+              <div className="mt-4 p-4 bg-slate-50/50 dark:bg-slate-900/50 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-inner">
+                <div className="flex items-center justify-between mb-3 px-1">
+                  <h4 className="text-[10px] uppercase tracking-widest font-bold text-slate-500 flex items-center gap-2">
+                    <Layers className="w-3 h-3" /> FORM BROWSER
+                  </h4>
+                </div>
+
+                <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 thin-scrollbar">
+                  {recentForms.length > 0 ? (
+                    recentForms.map((form) => (
+                      <div
+                        key={form.id}
+                        className={`group relative flex items-center justify-between p-3 rounded-xl border transition-all duration-200 cursor-pointer ${config.formId === form.id
+                          ? 'bg-white dark:bg-slate-800 border-primary shadow-sm ring-1 ring-primary/20'
+                          : 'bg-white dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:border-primary/40 hover:shadow-sm'
+                          }`}
+                        onClick={() => {
+                          handleConfigChange("formId", form.id);
+                          handleConfigChange("formName", form.name);
+                        }}
+                      >
+                        <div className="flex-1 min-w-0 pr-4">
+                          <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate group-hover:text-primary transition-colors">
+                            {form.name}
+                          </p>
+                          <p className="text-[10px] text-slate-500 uppercase mt-0.5 font-medium tracking-tight">
+                            {new Date(form.modifiedTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                          </p>
+                        </div>
+                        <a
+                          href={form.webViewLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 hover:text-primary transition-all px-2 py-1 rounded-lg hover:bg-primary/5"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Link2 className="w-3 h-3" />
+                          <span>Link</span>
+                        </a>
+                      </div>
+                    ))
+                  ) : !isFetchingForms ? (
+                    <div className="flex flex-col items-center justify-center p-6 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+                      <FormInput className="w-6 h-6 text-slate-300 mb-2" />
+                      <p className="text-[10px] text-slate-500 font-medium">No forms available</p>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center p-8">
+                      <RefreshCw className="w-5 h-5 animate-spin text-primary/30" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <p className="text-[10px] text-muted-foreground bg-blue-50 dark:bg-blue-900/10 p-2 rounded italic border border-blue-100 dark:border-blue-900/30 flex items-center gap-2">
+              <Sparkles className="w-3 h-3 text-blue-500" />
+              Tip: This trigger will run whenever someone submits the selected form.
+            </p>
+
+            {/* Visual Log Data */}
+            {config.formId && (
+              <div className="mt-6 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                    <Activity className="w-3 h-3 text-blue-500" />
+                    Visual Log Data
+                  </h4>
+                  <Badge variant="outline" className="text-[9px] font-bold bg-blue-50/50 dark:bg-blue-900/20 text-blue-600 border-blue-200/50 dark:border-blue-800/50 px-2 py-0">
+                    {recentResponses.length} Responses
+                  </Badge>
+                </div>
+
+                <div className="space-y-3 max-h-[220px] overflow-y-auto pr-2 thin-scrollbar">
+                  {isFetchingResponses ? (
+                    <div className="flex flex-col items-center justify-center p-8 bg-slate-50/50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                      <RefreshCw className="w-6 h-6 animate-spin text-primary/30 mb-2" />
+                      <p className="text-[10px] text-slate-500 font-medium">Tracking live data...</p>
+                    </div>
+                  ) : recentResponses.length > 0 ? (
+                    <div className="relative pl-4 space-y-4 before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-100 dark:before:bg-slate-800/50 after:absolute after:left-[4px] after:top-2 after:bottom-2 after:w-[8px] after:bg-transparent after:pointer-events-none">
+                      {recentResponses.slice(0, 5).map((response, idx) => (
+                        <div key={response.responseId || idx} className="relative">
+                          <div className="absolute -left-[14px] top-1.5 w-[14px] h-[14px] rounded-full bg-white dark:bg-slate-950 border-2 border-primary/40 z-10 box-content shadow-sm" />
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300">
+                                Response Received
+                              </span>
+                              <span className="text-[9px] text-slate-400 font-medium">
+                                {new Date(response.createTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/60 shadow-sm transition-all hover:border-primary/20">
+                              <div className="grid grid-cols-1 gap-1.5">
+                                {Object.entries(response.answers || {}).slice(0, 2).map(([qId, ans]: [any, any]) => (
+                                  <div key={qId} className="flex flex-col gap-0.5">
+                                    <span className="text-[8px] font-bold text-slate-400 truncate tracking-tight uppercase">
+                                      {formQuestions[qId] || "FIELD"}
+                                    </span>
+                                    <p className="text-[10px] font-medium text-slate-600 dark:text-slate-400 truncate pl-1.5 border-l-2 border-slate-100 dark:border-slate-800">
+                                      {ans.textAnswers?.answers?.[0]?.value || "No response"}
+                                    </p>
+                                  </div>
+                                ))}
+                                {Object.keys(response.answers || {}).length > 2 && (
+                                  <p className="text-[8px] text-primary/60 font-medium italic pt-1 border-t border-slate-50 dark:border-slate-800 mt-1">
+                                    + {Object.keys(response.answers || {}).length - 2} more fields captured
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      <div className="pt-2 flex justify-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-[9px] uppercase tracking-widest font-bold text-slate-400 hover:text-primary hover:bg-primary/5"
+                          onClick={() => fetchRecentResponses(config.formId)}
+                        >
+                          <RefreshCw className={`w-3 h-3 mr-2 ${isFetchingResponses ? 'animate-spin' : ''}`} />
+                          Sync Latest
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center p-8 bg-slate-50/50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                      <div className="p-3 bg-white dark:bg-slate-950 rounded-full mb-3 shadow-inner">
+                        <Activity className="w-5 h-5 text-slate-300" />
+                      </div>
+                      <p className="text-[10px] text-slate-500 font-medium max-w-[150px] text-center">No recent activity found for this form.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         );
       case "trigger-email":
@@ -2544,44 +2779,55 @@ function NodePropertiesPanel({
                 </Button>
               </div>
 
-              {/* Form Browser */}
-              <div className="mt-3 p-3 bg-muted/20 rounded-lg border border-border/40">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground flex items-center gap-1">
-                    <FormInput className="w-3 h-3" /> Your Forms
+              <div className="mt-4 p-4 bg-slate-50/50 dark:bg-slate-900/50 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-inner">
+                <div className="flex items-center justify-between mb-3 px-1">
+                  <h4 className="text-[10px] uppercase tracking-widest font-bold text-slate-500 flex items-center gap-2">
+                    <Layers className="w-3 h-3" /> FORM BROWSER
                   </h4>
                 </div>
 
-                <div className="space-y-1.5 max-h-[140px] overflow-y-auto pr-1 thin-scrollbar">
+                <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 thin-scrollbar">
                   {recentForms.length > 0 ? (
                     recentForms.map((form) => (
-                      <button
+                      <div
                         key={form.id}
-                        type="button"
-                        onClick={() => handleConfigChange("formId", form.id)}
-                        className={`w-full text-left p-2 rounded-md transition-all flex items-center gap-2 group ${config.formId === form.id
-                          ? 'bg-primary/10 border-primary/20 border shadow-sm'
-                          : 'hover:bg-background border border-transparent'
+                        className={`group relative flex items-center justify-between p-3 rounded-xl border transition-all duration-200 cursor-pointer ${config.formId === form.id
+                          ? 'bg-white dark:bg-slate-800 border-primary shadow-sm ring-1 ring-primary/20'
+                          : 'bg-white dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:border-primary/40 hover:shadow-sm'
                           }`}
+                        onClick={() => {
+                          handleConfigChange("formId", form.id);
+                          handleConfigChange("formName", form.name);
+                        }}
                       >
-                        <div className="p-1 rounded bg-purple-500/10 group-hover:bg-purple-500/20 transition-colors">
-                          <FormInput className="w-3 h-3 text-purple-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[11px] font-medium truncate group-hover:text-primary transition-colors">
+                        <div className="flex-1 min-w-0 pr-4">
+                          <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate group-hover:text-primary transition-colors">
                             {form.name}
                           </p>
-                          <p className="text-[9px] text-muted-foreground truncate uppercase">
-                            MODIFIED {new Date(form.modifiedTime).toLocaleDateString()}
+                          <p className="text-[10px] text-slate-500 uppercase mt-0.5 font-medium tracking-tight">
+                            {new Date(form.modifiedTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                           </p>
                         </div>
-                      </button>
+                        <a
+                          href={form.webViewLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 hover:text-primary transition-all px-2 py-1 rounded-lg hover:bg-primary/5"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Link2 className="w-3 h-3" />
+                          <span>Link</span>
+                        </a>
+                      </div>
                     ))
                   ) : !isFetchingForms ? (
-                    <p className="text-[10px] text-muted-foreground italic p-2">No forms found. Make sure you have created one.</p>
+                    <div className="flex flex-col items-center justify-center p-6 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+                      <FormInput className="w-6 h-6 text-slate-300 mb-2" />
+                      <p className="text-[10px] text-slate-500 font-medium">No forms available</p>
+                    </div>
                   ) : (
-                    <div className="flex items-center justify-center p-4">
-                      <RefreshCw className="w-4 h-4 animate-spin text-primary/40" />
+                    <div className="flex items-center justify-center p-8">
+                      <RefreshCw className="w-5 h-5 animate-spin text-primary/30" />
                     </div>
                   )}
                 </div>
@@ -2592,6 +2838,85 @@ function NodePropertiesPanel({
               <Sparkles className="w-3 h-3 text-blue-500" />
               Tip: Use manual Form ID if your form doesn't appear in the list.
             </p>
+
+            {/* Visual Log Data */}
+            {config.formId && (
+              <div className="mt-6 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                    <Activity className="w-3 h-3 text-blue-500" />
+                    Visual Log Data
+                  </h4>
+                  <Badge variant="outline" className="text-[9px] font-bold bg-blue-50/50 dark:bg-blue-900/20 text-blue-600 border-blue-200/50 dark:border-blue-800/50 px-2 py-0">
+                    {recentResponses.length} Responses
+                  </Badge>
+                </div>
+
+                <div className="space-y-3 max-h-[220px] overflow-y-auto pr-2 thin-scrollbar">
+                  {isFetchingResponses ? (
+                    <div className="flex flex-col items-center justify-center p-8 bg-slate-50/50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                      <RefreshCw className="w-6 h-6 animate-spin text-primary/30 mb-2" />
+                      <p className="text-[10px] text-slate-500 font-medium">Tracking live data...</p>
+                    </div>
+                  ) : recentResponses.length > 0 ? (
+                    <div className="relative pl-4 space-y-4 before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-100 dark:before:bg-slate-800/50 after:absolute after:left-[4px] after:top-2 after:bottom-2 after:w-[8px] after:bg-transparent after:pointer-events-none">
+                      {recentResponses.slice(0, 5).map((response, idx) => (
+                        <div key={response.responseId || idx} className="relative">
+                          <div className="absolute -left-[14px] top-1.5 w-[14px] h-[14px] rounded-full bg-white dark:bg-slate-950 border-2 border-primary/40 z-10 box-content shadow-sm" />
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300">
+                                Response Logged
+                              </span>
+                              <span className="text-[9px] text-slate-400 font-medium">
+                                {new Date(response.createTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/60 shadow-sm transition-all hover:border-primary/20">
+                              <div className="grid grid-cols-1 gap-1.5">
+                                {Object.entries(response.answers || {}).slice(0, 2).map(([qId, ans]: [any, any]) => (
+                                  <div key={qId} className="flex flex-col gap-0.5">
+                                    <span className="text-[8px] font-bold text-slate-400 truncate tracking-tight uppercase">
+                                      {formQuestions[qId] || "FIELD"}
+                                    </span>
+                                    <p className="text-[10px] font-medium text-slate-600 dark:text-slate-400 truncate pl-1.5 border-l-2 border-slate-100 dark:border-slate-800">
+                                      {ans.textAnswers?.answers?.[0]?.value || "No response"}
+                                    </p>
+                                  </div>
+                                ))}
+                                {Object.keys(response.answers || {}).length > 2 && (
+                                  <p className="text-[8px] text-primary/60 font-medium italic pt-1 border-t border-slate-50 dark:border-slate-800 mt-1">
+                                    + {Object.keys(response.answers || {}).length - 2} more fields captured
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      <div className="pt-2 flex justify-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-[9px] uppercase tracking-widest font-bold text-slate-400 hover:text-primary hover:bg-primary/5"
+                          onClick={() => fetchRecentResponses(config.formId)}
+                        >
+                          <RefreshCw className={`w-3 h-3 mr-2 ${isFetchingResponses ? 'animate-spin' : ''}`} />
+                          Sync Latest
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center p-8 bg-slate-50/50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                      <div className="p-3 bg-white dark:bg-slate-950 rounded-full mb-3 shadow-inner">
+                        <Activity className="w-5 h-5 text-slate-300" />
+                      </div>
+                      <p className="text-[10px] text-slate-500 font-medium max-w-[150px] text-center">No recent activity tracked.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         );
 
@@ -3244,8 +3569,11 @@ function NodePropertiesPanel({
                   <SelectItem value="equals">Equals</SelectItem>
                   <SelectItem value="not-equals">Not Equals</SelectItem>
                   <SelectItem value="contains">Contains</SelectItem>
+                  <SelectItem value="not-contains">Not Contains</SelectItem>
                   <SelectItem value="greater-than">Greater Than</SelectItem>
                   <SelectItem value="less-than">Less Than</SelectItem>
+                  <SelectItem value="exists">Exists</SelectItem>
+                  <SelectItem value="not-exists">Not Exists</SelectItem>
                 </SelectContent>
               </Select>
             </div>

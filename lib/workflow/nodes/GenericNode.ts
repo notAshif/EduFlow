@@ -1818,12 +1818,19 @@ export class GenericNode extends BaseNode {
                 const itemValue = item[field];
                 switch (operator) {
                     case 'equals': return itemValue === value;
-                    case 'not_equals': return itemValue !== value;
+                    case 'not_equals':
+                    case 'not-equals': return itemValue !== value;
                     case 'contains': return String(itemValue).includes(String(value));
-                    case 'greater': return itemValue > value;
-                    case 'less': return itemValue < value;
-                    case 'greater_equals': return itemValue >= value;
-                    case 'less_equals': return itemValue <= value;
+                    case 'greater':
+                    case 'greater-than':
+                    case 'greater_than': return itemValue > value;
+                    case 'less':
+                    case 'less-than':
+                    case 'less_than': return itemValue < value;
+                    case 'greater_equals':
+                    case 'greater-equals': return itemValue >= value;
+                    case 'less_equals':
+                    case 'less-equals': return itemValue <= value;
                     default: return true;
                 }
             });
@@ -1857,13 +1864,24 @@ export class GenericNode extends BaseNode {
 
         switch (operator) {
             case 'equals': conditionMet = conditionValue == compareValue; break;
-            case 'not_equals': conditionMet = conditionValue != compareValue; break;
-            case 'greater': conditionMet = conditionValue > compareValue; break;
-            case 'less': conditionMet = conditionValue < compareValue; break;
-            case 'greater_equals': conditionMet = conditionValue >= compareValue; break;
-            case 'less_equals': conditionMet = conditionValue <= compareValue; break;
+            case 'not_equals':
+            case 'not-equals': conditionMet = conditionValue != compareValue; break;
+            case 'greater':
+            case 'greater-than':
+            case 'greater_than': conditionMet = conditionValue > compareValue; break;
+            case 'less':
+            case 'less-than':
+            case 'less_than': conditionMet = conditionValue < compareValue; break;
+            case 'greater_equals':
+            case 'greater-equals': conditionMet = conditionValue >= compareValue; break;
+            case 'less_equals':
+            case 'less-equals': conditionMet = conditionValue <= compareValue; break;
             case 'contains': conditionMet = String(conditionValue).includes(String(compareValue)); break;
-            case 'not_contains': conditionMet = !String(conditionValue).includes(String(compareValue)); break;
+            case 'not_contains':
+            case 'not-contains': conditionMet = !String(conditionValue).includes(String(compareValue)); break;
+            case 'exists': conditionMet = conditionValue !== undefined && conditionValue !== null; break;
+            case 'not_exists':
+            case 'not-exists': conditionMet = conditionValue === undefined || conditionValue === null; break;
             case 'is_empty': conditionMet = !conditionValue || conditionValue === ''; break;
             case 'not_empty': conditionMet = !!conditionValue && conditionValue !== ''; break;
             default: conditionMet = Boolean(conditionValue);

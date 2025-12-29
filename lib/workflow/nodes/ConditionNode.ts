@@ -13,8 +13,16 @@ export class ConditionNode extends BaseNode {
       throw new Error('Operator is required');
     }
 
-    if (!['equals', 'not_equals', 'contains', 'not_contains', 'greater_than', 'less_than', 'exists', 'not_exists'].includes(config.operator)) {
-      throw new Error('Invalid operator');
+    const validOperators = [
+      'equals', 'not_equals', 'not-equals',
+      'contains', 'not_contains', 'not-contains',
+      'greater_than', 'greater-than', 'greater',
+      'less_than', 'less-than', 'less',
+      'exists', 'not_exists', 'not-exists'
+    ];
+
+    if (!validOperators.includes(config.operator)) {
+      throw new Error(`Invalid operator: ${config.operator}`);
     }
   }
 
@@ -31,24 +39,31 @@ export class ConditionNode extends BaseNode {
           result = fieldValue === value;
           break;
         case 'not_equals':
+        case 'not-equals':
           result = fieldValue !== value;
           break;
         case 'contains':
           result = String(fieldValue).toLowerCase().includes(String(value).toLowerCase());
           break;
         case 'not_contains':
+        case 'not-contains':
           result = !String(fieldValue).toLowerCase().includes(String(value).toLowerCase());
           break;
         case 'greater_than':
+        case 'greater-than':
+        case 'greater':
           result = Number(fieldValue) > Number(value);
           break;
         case 'less_than':
+        case 'less-than':
+        case 'less':
           result = Number(fieldValue) < Number(value);
           break;
         case 'exists':
           result = fieldValue !== undefined && fieldValue !== null;
           break;
         case 'not_exists':
+        case 'not-exists':
           result = fieldValue === undefined || fieldValue === null;
           break;
       }

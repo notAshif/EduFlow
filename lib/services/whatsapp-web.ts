@@ -136,21 +136,6 @@ class WhatsAppWebService extends EventEmitter {
 
             console.log('[WHATSAPP-WEB] Setting up browser options...');
 
-            // Clear potential session locks (common issue on Windows/Vercel)
-            // This prevents the "browser already open" error that hangs WhatsApp initialization
-            const authPath = (process.env.NODE_ENV === 'production' || process.env.VERCEL)
-                ? path.join(os.tmpdir(), '.wwebjs_auth')
-                : path.join(process.cwd(), '.wwebjs_auth');
-
-            try {
-                const lockPath = path.join(authPath, 'SingletonLock');
-                if (fs.existsSync(lockPath)) {
-                    console.log('[WHATSAPP-WEB] Removing stale session lock...');
-                    fs.unlinkSync(lockPath);
-                }
-            } catch (e) {
-                // Ignore errors if no lock exists
-            }
 
             let puppeteerOpts: any = {
                 headless: true,
@@ -169,17 +154,16 @@ class WhatsAppWebService extends EventEmitter {
                 ]
             };
 
-            // Detection for Vercel environment
-            const isVercel = !!(process.env.VERCEL || process.env.NEXT_PUBLIC_VERCEL_URL);
+            // Detection for Vercel environment - only use sparticuz on Linux
+            const isVercel = !!(process.env.VERCEL || process.env.NEXT_PUBLIC_VERCEL_URL) && os.platform() === 'linux';
             let executablePath: string | null = null;
 
             if (isVercel) {
                 try {
-                    console.log('[WHATSAPP-WEB] Vercel environment detected, loading optimized chromium...');
+                    console.log('[WHATSAPP-WEB] Vercel environment detected (Linux), loading optimized chromium...');
                     const chromium = (await import('@sparticuz/chromium-min')).default as any;
 
-                    // Note: @sparticuz/chromium-min requires a pack URL. 
-                    // We'll try the default, but this is why it might have failed.
+                    // Note: @sparticuz/chromium-min requires a pack URL in some versions
                     executablePath = await chromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar');
 
                     if (executablePath) {
@@ -190,12 +174,9 @@ class WhatsAppWebService extends EventEmitter {
                             headless: chromium.headless,
                         };
                         console.log('[WHATSAPP-WEB] ✓ Successfully loaded chromium for Vercel:', executablePath);
-                    } else {
-                        console.warn('[WHATSAPP-WEB] ⚠️ Chromium path is empty. Vercel deployment may fail.');
                     }
                 } catch (err) {
                     console.error('[WHATSAPP-WEB] ❌ Failed to load @sparticuz/chromium-min:', err);
-                    this.lastError = `Chromium load failed: ${err instanceof Error ? err.message : String(err)}`;
                 }
             }
 
@@ -225,25 +206,67 @@ class WhatsAppWebService extends EventEmitter {
             }
 
             // Final validation and channel fallback
-            if (!puppeteerOpts.executablePath) {
+            if (!executablePath) {
+                executablePath = await this.findChromiumExecutable();
+            }
+
+            if (executablePath) {
+                puppeteerOpts.executablePath = executablePath;
+            } else {
                 console.log('[WHATSAPP-WEB] No specific executable path found, using "chrome" channel fallback...');
                 puppeteerOpts.channel = 'chrome';
+            }
+
+            // Absolute path for auth data
+            const authPath = (process.env.NODE_ENV === 'production' || process.env.VERCEL)
+                ? path.join(os.tmpdir(), '.wwebjs_auth')
+                : path.resolve(process.cwd(), '.wwebjs_auth');
+
+            // Ensure directory exists
+            if (!fs.existsSync(authPath)) {
+                try { fs.mkdirSync(authPath, { recursive: true }); } catch (e) { }
+            }
+
+            try {
+                // Cleanup Windows lock files
+                const sessionPath = path.join(authPath, 'session');
+                const locks = [
+                    path.join(authPath, 'SingletonLock'),
+                    path.join(sessionPath, 'SingletonLock')
+                ];
+
+                locks.forEach(p => {
+                    if (fs.existsSync(p)) {
+                        console.log(`[WHATSAPP-WEB] Cleaning lock file: ${p}`);
+                        try { fs.unlinkSync(p); } catch (e) { }
+                    }
+                });
+            } catch (e) { }
+
+            // Refine args specifically for Windows/Local environments
+            if (os.platform() === 'win32') {
+                puppeteerOpts.args = [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    `--user-data-dir=${authPath}`
+                ];
+                // TEMP: Use visible browser to debug launch issues
+                puppeteerOpts.headless = false;
             }
 
             console.log('[WHATSAPP-WEB] Launching browser with options...', {
                 executablePath: puppeteerOpts.executablePath,
                 channel: puppeteerOpts.channel,
-                headless: puppeteerOpts.headless
+                headless: puppeteerOpts.headless,
+                authPath
             });
 
             this.client = new Client({
                 authStrategy: new LocalAuth({
-                    dataPath: (process.env.NODE_ENV === 'production' || process.env.VERCEL)
-                        ? path.join(os.tmpdir(), '.wwebjs_auth')
-                        : path.join(process.cwd(), '.wwebjs_auth')
+                    dataPath: authPath
                 }),
                 puppeteer: puppeteerOpts,
-                authTimeoutMs: 120000, // 2 minutes timeout for auth
+                authTimeoutMs: 120000,
                 qrMaxRetries: 10,
                 webVersionCache: {
                     type: 'remote',
@@ -360,7 +383,9 @@ class WhatsAppWebService extends EventEmitter {
     }
 
     isConnected(): boolean {
-        return this.isReady;
+        const connected = this.isReady && this.client !== null;
+        console.log(`[WHATSAPP-WEB] isConnected check: isReady=${this.isReady}, hasClient=${!!this.client}, result=${connected}`);
+        return connected;
     }
 
     async getStatus(): Promise<{
@@ -397,6 +422,21 @@ class WhatsAppWebService extends EventEmitter {
         return groups;
     }
 
+    // Get all chats (individuals and groups)
+    async getChatsList(): Promise<Array<{ id: string; name: string; isGroup: boolean; participants?: number }>> {
+        if (!this.isReady || !this.client) {
+            throw new Error('WhatsApp Web client not ready');
+        }
+
+        const chats = await this.client.getChats();
+        return chats.map((chat: any) => ({
+            id: chat.id._serialized,
+            name: chat.name || chat.id.user,
+            isGroup: chat.isGroup,
+            participants: chat.isGroup ? chat.participants?.length : undefined
+        }));
+    }
+
     // Send message to phone number or group
     async sendMessage(to: string, message: string, isGroup: boolean = false): Promise<SendResult> {
         if (!this.isReady || !this.client) {
@@ -409,12 +449,15 @@ class WhatsAppWebService extends EventEmitter {
         try {
             let chatId: string;
 
-            if (isGroup) {
+            if (to.includes('@g.us')) {
+                chatId = to;
+            } else if (to.includes('@c.us')) {
+                chatId = to;
+            } else if (isGroup) {
                 // For groups, use the group ID directly (e.g., "123456789@g.us")
-                chatId = to.includes('@g.us') ? to : `${to}@g.us`;
+                chatId = `${to}@g.us`;
             } else {
                 // For individuals, format phone number
-                // Remove any non-numeric characters except +
                 const cleanNumber = to.replace(/[^\d]/g, '');
                 chatId = `${cleanNumber}@c.us`;
             }
@@ -430,11 +473,18 @@ class WhatsAppWebService extends EventEmitter {
                 messageId: sentMessage.id._serialized,
                 timestamp: new Date().toISOString()
             };
-        } catch (error) {
+        } catch (error: any) {
             console.error('[WHATSAPP-WEB] ✗ Send failed:', error);
+
+            // Handle common minified errors or strange objects
+            let errorMsg = 'Failed to send message';
+            if (error instanceof Error) errorMsg = error.message;
+            else if (typeof error === 'string') errorMsg = error;
+            else if (error && typeof error === 'object') errorMsg = JSON.stringify(error);
+
             return {
                 success: false,
-                error: error instanceof Error ? error.message : 'Failed to send message'
+                error: errorMsg
             };
         }
     }

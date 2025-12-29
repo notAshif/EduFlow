@@ -1,13 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { BaseNode } from '../node-base';
 import { NodeExecutionContext, NodeResult } from '@/lib/types';
+import { getWhatsAppWebService } from '@/lib/services/whatsapp-web';
+
 
 export class AlertSendNode extends BaseNode {
     async execute(context: NodeExecutionContext): Promise<NodeResult> {
         const startTime = Date.now();
 
         try {
-            const { channels, recipients, message, title, priority } = this.config;
+            const { channels, recipients, message, title, priority, whatsappGroupId } = this.config;
 
             console.log('[ALERT] Starting multi-channel alert');
             console.log('[ALERT] Channels:', channels);
@@ -27,19 +29,19 @@ export class AlertSendNode extends BaseNode {
                 try {
                     switch (channel) {
                         case 'whatsapp':
-                            results.push(await this.sendWhatsApp(recipients, message));
+                            results.push(await this.sendWhatsApp(context, recipients, message, whatsappGroupId));
                             break;
                         case 'email':
-                            results.push(await this.sendEmail(recipients, title || 'Alert', message));
-                            break;
-                        case 'sms':
-                            results.push(await this.sendSMS(recipients, message));
+                            results.push(await this.sendEmail(context, recipients, title || 'Alert', message));
                             break;
                         case 'slack':
-                            results.push(await this.sendSlack(message));
+                            results.push(await this.sendSlack(context, message));
                             break;
                         case 'discord':
-                            results.push(await this.sendDiscord(message));
+                            results.push(await this.sendDiscord(context, message));
+                            break;
+                        case 'sms':
+                            results.push({ channel: 'sms', success: false, error: 'SMS (Twilio) has been removed. Please use WhatsApp for messaging.' });
                             break;
                         default:
                             console.warn(`[ALERT] Unknown channel: ${channel}`);
@@ -62,7 +64,7 @@ export class AlertSendNode extends BaseNode {
 
             return {
                 nodeId: context.context.runId,
-                success: allSuccessful,
+                success: successCount > 0, // Success if at least one channel worked
                 output: {
                     results,
                     priority: priority || 'normal',
@@ -83,118 +85,79 @@ export class AlertSendNode extends BaseNode {
         }
     }
 
-    private async sendWhatsApp(recipients: string | string[], message: string) {
-        console.log('[ALERT/WHATSAPP] Sending...');
-        const recipientList = typeof recipients === 'string' ? recipients.split(',').map(r => r.trim()) : recipients;
+    private async sendWhatsApp(context: NodeExecutionContext, recipients: string | string[], message: string, whatsappGroupId?: string) {
+        let recipientList = typeof recipients === 'string' ? recipients.split(',').map(r => r.trim()).filter(Boolean) : (Array.isArray(recipients) ? recipients : [recipients]);
 
-        const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
-        const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
-        const twilioWhatsAppFrom = process.env.TWILIO_WHATSAPP_FROM || process.env.TWILIO_PHONE_NUMBER || 'whatsapp:+14155238886';
-
-        if (!twilioAccountSid || !twilioAuthToken) {
-            console.warn('[ALERT/WHATSAPP] Not configured - simulating');
-            return {
-                channel: 'whatsapp',
-                success: true,
-                recipients: recipientList.length,
-                simulated: true,
-                note: 'Twilio credentials not set. Set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN in your .env file'
-            };
+        // Merge explicitly selected group/chat ID if present
+        if (whatsappGroupId && whatsappGroupId !== "none") {
+            if (!recipientList.includes(whatsappGroupId)) {
+                recipientList = [...recipientList, whatsappGroupId];
+            }
         }
 
-        const authHeader = 'Basic ' + Buffer.from(`${twilioAccountSid}:${twilioAuthToken}`).toString('base64');
-        const formattedFrom = twilioWhatsAppFrom.startsWith('whatsapp:') ? twilioWhatsAppFrom : `whatsapp:${twilioWhatsAppFrom}`;
+        // Use WhatsApp Web service (Twilio removed)
+        const whatsappWebService = getWhatsAppWebService();
 
-        console.log('[ALERT/WHATSAPP] Using From:', formattedFrom);
+        if (!whatsappWebService.isConnected()) {
+            console.error('[ALERT/WHATSAPP] WhatsApp Web not connected');
+            return {
+                channel: 'whatsapp',
+                success: false,
+                error: 'WhatsApp Web not connected. Please scan QR code in Integrations.'
+            };
+        }
 
         let successCount = 0;
         const sendResults: any[] = [];
 
         for (const recipient of recipientList) {
             try {
-                // Format recipient - must have whatsapp: prefix and valid international format
-                let formattedTo = recipient.trim();
+                // Clean the number/ID
+                let cleanTarget = recipient.replace(/^whatsapp:/i, '').trim();
 
-                // Remove any existing whatsapp: prefix to normalize
-                formattedTo = formattedTo.replace(/^whatsapp:/i, '');
-
-                // Ensure proper phone format with +
-                if (!formattedTo.startsWith('+')) {
-                    formattedTo = `+${formattedTo}`;
+                // SKIP if it looks like an email (contains @ but is not a WhatsApp ID like @c.us or @g.us)
+                const isWwebId = cleanTarget.includes('@c.us') || cleanTarget.includes('@g.us');
+                if (cleanTarget.includes('@') && !isWwebId) {
+                    console.log(`[ALERT/WHATSAPP] Skipping email recipient: ${cleanTarget}`);
+                    continue;
                 }
 
-                // Add whatsapp: prefix
-                formattedTo = `whatsapp:${formattedTo}`;
+                // Determine if it's a group
+                const isGroup = cleanTarget.includes('@g.us');
 
-                console.log(`[ALERT/WHATSAPP] Sending to: ${formattedTo}`);
+                console.log(`[ALERT/WHATSAPP] Sending via WWeb to: ${cleanTarget}`);
+                const result = await whatsappWebService.sendMessage(cleanTarget, message, isGroup);
 
-                const response = await fetch(
-                    `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages.json`,
-                    {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': authHeader,
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                        },
-                        body: new URLSearchParams({
-                            From: formattedFrom,
-                            To: formattedTo,
-                            Body: message
-                        }).toString()
-                    }
-                );
-
-                const data = await response.json();
-
-                if (response.ok) {
+                if (result.success) {
                     successCount++;
-                    sendResults.push({
-                        recipient: formattedTo,
-                        success: true,
-                        sid: data.sid,
-                        status: data.status
-                    });
-                    console.log(`[ALERT/WHATSAPP] ✓ Sent to ${formattedTo}, SID: ${data.sid}`);
+                    sendResults.push({ recipient, success: true, method: 'whatsapp-web', messageId: result.messageId });
                 } else {
-                    console.error(`[ALERT/WHATSAPP] ✗ Failed for ${formattedTo}:`, data);
-                    sendResults.push({
-                        recipient: formattedTo,
-                        success: false,
-                        error: data.message || data.error_message || 'Unknown Twilio error',
-                        code: data.code || data.error_code,
-                        moreInfo: data.more_info
-                    });
+                    console.error(`[ALERT/WHATSAPP] WWeb failed for ${cleanTarget}:`, result.error);
+                    sendResults.push({ recipient, success: false, error: result.error });
                 }
             } catch (error) {
-                console.error(`[ALERT/WHATSAPP] ✗ Exception for ${recipient}:`, error);
-                sendResults.push({
-                    recipient,
-                    success: false,
-                    error: error instanceof Error ? error.message : 'Network error'
-                });
+                sendResults.push({ recipient, success: false, error: error instanceof Error ? error.message : 'Error' });
             }
         }
-
-        console.log(`[ALERT/WHATSAPP] Complete: ${successCount}/${recipientList.length} sent`);
 
         return {
             channel: 'whatsapp',
             success: successCount > 0,
             recipients: recipientList.length,
             successfulSends: successCount,
-            simulated: false,
-            details: sendResults,
-            fromNumber: formattedFrom
+            details: sendResults
         };
     }
 
-    private async sendEmail(recipients: string | string[], title: string, message: string) {
+    private async sendEmail(context: NodeExecutionContext, recipients: string | string[], title: string, message: string) {
         console.log('[ALERT/EMAIL] Sending...');
-        const recipientList = typeof recipients === 'string' ? recipients.split(',').map(r => r.trim()) : recipients;
+        const recipientList = typeof recipients === 'string' ? recipients.split(',').map(r => r.trim()).filter(r => r.includes('@')) : recipients;
 
-        const smtpHost = process.env.SMTP_HOST;
-        const smtpUser = process.env.SMTP_USER;
-        const smtpPass = process.env.SMTP_PASS;
+        const creds = context.services?.credentials || {};
+        const smtpHost = creds.smtpHost || process.env.SMTP_HOST;
+        const smtpUser = creds.smtpUser || process.env.SMTP_USER;
+        const smtpPass = creds.smtpPass || process.env.SMTP_PASS;
+        const smtpPort = parseInt(creds.smtpPort || process.env.SMTP_PORT || '587');
 
         if (!smtpHost || !smtpUser || !smtpPass) {
             console.warn('[ALERT/EMAIL] Not configured - simulating');
@@ -210,9 +173,12 @@ export class AlertSendNode extends BaseNode {
             const nodemailer = await import('nodemailer');
             const transporter = nodemailer.createTransport({
                 host: smtpHost,
-                port: parseInt(process.env.SMTP_PORT || '587'),
-                secure: false,
+                port: smtpPort,
+                secure: smtpPort === 465,
                 auth: { user: smtpUser, pass: smtpPass },
+                tls: {
+                    rejectUnauthorized: false
+                }
             });
 
             for (const recipient of recipientList) {
@@ -242,66 +208,10 @@ export class AlertSendNode extends BaseNode {
         }
     }
 
-    private async sendSMS(recipients: string | string[], message: string) {
-        console.log('[ALERT/SMS] Sending...');
-        const recipientList = typeof recipients === 'string' ? recipients.split(',').map(r => r.trim()) : recipients;
-
-        const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
-        const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
-        const twilioPhoneFrom = process.env.TWILIO_PHONE_NUMBER?.replace('whatsapp:', '') || '+14155238886';
-
-        if (!twilioAccountSid || !twilioAuthToken) {
-            console.warn('[ALERT/SMS] Not configured - simulating');
-            return {
-                channel: 'sms',
-                success: true,
-                recipients: recipientList.length,
-                simulated: true
-            };
-        }
-
-        const authHeader = 'Basic ' + Buffer.from(`${twilioAccountSid}:${twilioAuthToken}`).toString('base64');
-
-        let successCount = 0;
-        for (const recipient of recipientList) {
-            try {
-                const formattedTo = recipient.startsWith('+') ? recipient : `+${recipient}`;
-
-                const response = await fetch(
-                    `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages.json`,
-                    {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': authHeader,
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                        },
-                        body: new URLSearchParams({
-                            From: twilioPhoneFrom,
-                            To: formattedTo,
-                            Body: message
-                        }).toString()
-                    }
-                );
-
-                if (response.ok) successCount++;
-            } catch (error) {
-                console.error(`[ALERT/SMS] Failed for ${recipient}:`, error);
-            }
-        }
-
-        console.log(`[ALERT/SMS] ✓ Sent to ${successCount}/${recipientList.length}`);
-        return {
-            channel: 'sms',
-            success: successCount > 0,
-            recipients: recipientList.length,
-            successfulSends: successCount,
-            simulated: false
-        };
-    }
-
-    private async sendSlack(message: string) {
+    private async sendSlack(context: NodeExecutionContext, message: string) {
         console.log('[ALERT/SLACK] Sending...');
-        const webhookUrl = process.env.SLACK_WEBHOOK_URL;
+        const creds = context.services?.credentials || {};
+        const webhookUrl = creds.slackWebhookUrl || process.env.SLACK_WEBHOOK_URL;
 
         if (!webhookUrl) {
             console.warn('[ALERT/SLACK] Not configured - simulating');
@@ -316,11 +226,8 @@ export class AlertSendNode extends BaseNode {
             });
 
             const success = response.ok && await response.text() === 'ok';
-            console.log(`[ALERT/SLACK] ${success ? '✓' : '✗'} ${success ? 'Success' : 'Failed'}`);
-
             return { channel: 'slack', success, simulated: false };
         } catch (error) {
-            console.error('[ALERT/SLACK] ✗ Failed:', error);
             return {
                 channel: 'slack',
                 success: false,
@@ -329,9 +236,10 @@ export class AlertSendNode extends BaseNode {
         }
     }
 
-    private async sendDiscord(message: string) {
+    private async sendDiscord(context: NodeExecutionContext, message: string) {
         console.log('[ALERT/DISCORD] Sending...');
-        const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
+        const creds = context.services?.credentials || {};
+        const webhookUrl = creds.discordWebhookUrl || process.env.DISCORD_WEBHOOK_URL;
 
         if (!webhookUrl) {
             console.warn('[ALERT/DISCORD] Not configured - simulating');
@@ -346,11 +254,8 @@ export class AlertSendNode extends BaseNode {
             });
 
             const success = response.ok;
-            console.log(`[ALERT/DISCORD] ${success ? '✓' : '✗'} ${success ? 'Success' : 'Failed'}`);
-
             return { channel: 'discord', success, simulated: false };
         } catch (error) {
-            console.error('[ALERT/DISCORD] ✗ Failed:', error);
             return {
                 channel: 'discord',
                 success: false,
@@ -361,10 +266,10 @@ export class AlertSendNode extends BaseNode {
 
     validate(config: Record<string, any>): void {
         if (!config.channels) {
-            throw new Error('Alert node requires "channels" field (whatsapp, email, sms, slack, discord)');
+            throw new Error('Alert node requires "channels" field (whatsapp, email, slack, discord)');
         }
-        if (!config.recipients) {
-            throw new Error('Alert node requires "recipients" field');
+        if (!config.recipients && !config.whatsappGroupId) {
+            throw new Error('Alert node requires "recipients" or a selected WhatsApp group');
         }
         if (!config.message) {
             throw new Error('Alert node requires "message" field');

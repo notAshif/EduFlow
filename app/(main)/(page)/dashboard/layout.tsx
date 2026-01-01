@@ -2,6 +2,7 @@ import { ReactNode } from 'react'
 import { Sidebar } from '@/components/dashboard/sidebar'
 import { Header } from '@/components/dashboard/header'
 import { SchedulerInit } from '@/components/dashboard/scheduler-init'
+import { RealtimeNotifications } from '@/components/dashboard/realtime-notifications'
 
 export const dynamic = 'force-dynamic';
 
@@ -12,8 +13,9 @@ export default function DashboardLayout({
 }) {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
-      {/* Initialize scheduler for scheduled workflows */}
+      {/* Real-time event handlers */}
       <SchedulerInit />
+      <RealtimeNotifications />
 
       {/* Sidebar Wrapper - Desktop only, fixed width handled by component or flex */}
       <aside className="hidden md:flex flex-col z-30 h-full border-r border-border/50 bg-card/50 backdrop-blur-xl">

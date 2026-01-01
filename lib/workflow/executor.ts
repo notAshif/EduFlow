@@ -85,6 +85,7 @@ export class WorkflowExecutor {
             runId,
             organizationId: workflow.organizationId,
             previousResults: logs,
+            userId,
           },
           services: { credentials },
         };
@@ -268,18 +269,43 @@ export class WorkflowExecutor {
       'microsoft-outlook': 'microsoft',
       'microsoft-onedrive': 'onedrive',
       'microsoft-excel': 'microsoft',
+      'power-bi': 'microsoft',
       // Zoom
       'zoom-meeting': 'zoom',
       'zoom-recording': 'zoom',
-      // AI
+      // AI & Analytics
       'ai-summarize': 'openai',
       'ai-translate': 'openai',
       'ai-sentiment': 'openai',
+      'ai-analysis': 'openai',
       'local-ai': 'openai',
       'local-search': 'openai',
+      'sentiment-analysis': 'openai',
+      'chart-generate': [],
+      'generate-chart': [],
+      'analytics-track': [],
+      'track-analytics': [],
+      // Data & Storage
+      'database-query': [],
+      'spreadsheet-update': 'google-sheets',
+      'update-spreadsheet': 'google-sheets',
+      'file-read': 'google-drive',
+      'read-file': 'google-drive',
+      'file-write': 'google-drive',
+      'write-file': 'google-drive',
+      'json-parse': [],
+      'parse-json': [],
+      'transform': [],
+      'transform-data': [],
+      'split': [],
+      'merge': [],
+      // Logic & Utility
+      'condition': [],
+      'delay': [],
+      'loop': [],
+      'filter': [],
       // Education
       'attendance-track': 'twilio',
-      'condition': [],
     };
 
     const integrationTypes = integrationMap[nodeType];

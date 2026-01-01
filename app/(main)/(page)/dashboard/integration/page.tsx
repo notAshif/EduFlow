@@ -43,7 +43,10 @@ import {
     Link2,
     Unlink,
     FormInput,
-    CheckSquare
+    CheckSquare,
+    Cloud,
+    CloudOff,
+    Upload
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
@@ -393,6 +396,8 @@ export default function IntegrationPage() {
     const [isTesting, setIsTesting] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
     const [isLoading, setIsLoading] = useState(true)
+    const [isSyncing, setIsSyncing] = useState(false)
+    const [lastSyncTime, setLastSyncTime] = useState<string | null>(null)
     const [newIntegration, setNewIntegration] = useState({
         name: '',
         description: '',
@@ -405,6 +410,12 @@ export default function IntegrationPage() {
     useEffect(() => {
         const loadIntegrations = async () => {
             setIsLoading(true)
+
+            // Load last sync time
+            const savedSyncTime = localStorage.getItem('eduflow_last_sync')
+            if (savedSyncTime) {
+                setLastSyncTime(savedSyncTime)
+            }
 
             // 1. Fetch from Database
             let dbIntegrations: any[] = []
@@ -527,6 +538,97 @@ export default function IntegrationPage() {
         } catch (error) {
             console.error('Failed to delete:', error)
             return false
+        }
+    }
+
+    // Sync all integrations to cloud (database)
+    const syncToCloud = async () => {
+        setIsSyncing(true)
+        try {
+            // Prepare integrations for sync
+            const integrationsToSync = integrations
+                .filter(i => i.enabled && i.config && Object.keys(i.config).some(k => i.config?.[k as keyof IntegrationConfig]))
+                .map(i => ({
+                    type: i.id,
+                    credentials: i.config,
+                    meta: { config: i.config, name: i.name, category: i.category }
+                }))
+
+            const response = await fetch('/api/integrations/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ integrations: integrationsToSync })
+            })
+
+            const data = await response.json()
+
+            if (data.success) {
+                const syncTime = new Date().toISOString()
+                setLastSyncTime(syncTime)
+                localStorage.setItem('eduflow_last_sync', syncTime)
+
+                toast({
+                    title: 'Synced to Cloud',
+                    description: `${data.synced} integration(s) saved to your account.`,
+                })
+            } else {
+                throw new Error(data.error)
+            }
+        } catch (error) {
+            toast({
+                title: 'Sync Failed',
+                description: error instanceof Error ? error.message : 'Failed to sync integrations',
+                variant: 'destructive',
+            })
+        } finally {
+            setIsSyncing(false)
+        }
+    }
+
+    // Restore integrations from cloud
+    const restoreFromCloud = async () => {
+        setIsSyncing(true)
+        try {
+            const response = await fetch('/api/integrations/sync')
+            const data = await response.json()
+
+            if (data.success && data.integrations.length > 0) {
+                // Merge cloud integrations with local
+                const merged = integrations.map(defaultInt => {
+                    const cloudInt = data.integrations.find((c: any) => c.type === defaultInt.id)
+                    if (cloudInt) {
+                        return {
+                            ...defaultInt,
+                            enabled: true,
+                            config: cloudInt.credentials as IntegrationConfig,
+                            connectionStatus: 'connected' as const,
+                            lastTested: cloudInt.updatedAt,
+                        }
+                    }
+                    return defaultInt
+                })
+
+                setIntegrations(merged)
+                saveToLocalStorage(merged)
+
+                toast({
+                    title: 'Restored from Cloud',
+                    description: `${data.count} integration(s) restored from your account.`,
+                })
+            } else {
+                toast({
+                    title: 'No Integrations Found',
+                    description: 'No saved integrations found in your cloud account.',
+                })
+            }
+        } catch (error) {
+            toast({
+                title: 'Restore Failed',
+                description: error instanceof Error ? error.message : 'Failed to restore integrations',
+                variant: 'destructive',
+            })
+        } finally {
+            setIsSyncing(false)
         }
     }
 
@@ -840,11 +942,43 @@ export default function IntegrationPage() {
                     </h1>
                     <p className="text-muted-foreground mt-1">
                         Connect your favorite tools to automate your teaching workflow.
+                        {lastSyncTime && (
+                            <span className="ml-2 text-xs text-green-600">
+                                • Last synced: {new Date(lastSyncTime).toLocaleTimeString()}
+                            </span>
+                        )}
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={syncToCloud}
+                        disabled={isSyncing}
+                        className="border-blue-200 hover:bg-blue-50 dark:border-blue-800 dark:hover:bg-blue-900/20"
+                    >
+                        {isSyncing ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                            <Cloud className="w-4 h-4 mr-2 text-blue-600" />
+                        )}
+                        Sync to Cloud
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={restoreFromCloud}
+                        disabled={isSyncing}
+                    >
+                        {isSyncing ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                            <Download className="w-4 h-4 mr-2" />
+                        )}
+                        Restore
+                    </Button>
                     <Button variant="outline" size="sm" onClick={exportConfig}>
-                        <Download className="w-4 h-4 mr-2" />
+                        <Upload className="w-4 h-4 mr-2" />
                         Export
                     </Button>
                     <Button size="sm" onClick={() => setShowAddModal(true)}>
@@ -853,6 +987,27 @@ export default function IntegrationPage() {
                     </Button>
                 </div>
             </div>
+
+            {/* Cloud Sync Info Banner */}
+            <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200 dark:border-blue-800">
+                <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center shrink-0">
+                            <Cloud className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div className="flex-1">
+                            <h3 className="font-semibold text-blue-800 dark:text-blue-300">Cloud Sync Enabled</h3>
+                            <p className="text-sm text-blue-700 dark:text-blue-400">
+                                Your integrations are saved to your account. Use <strong>&quot;Sync to Cloud&quot;</strong> to backup configurations,
+                                or <strong>&quot;Restore&quot;</strong> to recover them on any device.
+                            </p>
+                            <p className="text-xs text-blue-600/80 dark:text-blue-500 mt-1">
+                                <strong>Note:</strong> WhatsApp Web requires a live browser session and may need re-authentication on serverless platforms like Vercel.
+                            </p>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
 
             {/* Stats Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

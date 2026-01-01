@@ -160,12 +160,11 @@ export class AlertSendNode extends BaseNode {
         const smtpPort = parseInt(creds.smtpPort || process.env.SMTP_PORT || '587');
 
         if (!smtpHost || !smtpUser || !smtpPass) {
-            console.warn('[ALERT/EMAIL] Not configured - simulating');
             return {
                 channel: 'email',
-                success: true,
-                recipients: recipientList.length,
-                simulated: true
+                success: false,
+                error: 'Email integration not configured (SMTP missing). Please set SMTP_HOST, SMTP_USER, and SMTP_PASS environment variables or update Integration settings.',
+                recipients: recipientList.length
             };
         }
 
@@ -214,8 +213,7 @@ export class AlertSendNode extends BaseNode {
         const webhookUrl = creds.slackWebhookUrl || process.env.SLACK_WEBHOOK_URL;
 
         if (!webhookUrl) {
-            console.warn('[ALERT/SLACK] Not configured - simulating');
-            return { channel: 'slack', success: true, simulated: true };
+            return { channel: 'slack', success: false, error: 'Slack Webhook URL not configured. Please set SLACK_WEBHOOK_URL or update the integration settings.' };
         }
 
         try {
@@ -242,8 +240,7 @@ export class AlertSendNode extends BaseNode {
         const webhookUrl = creds.discordWebhookUrl || process.env.DISCORD_WEBHOOK_URL;
 
         if (!webhookUrl) {
-            console.warn('[ALERT/DISCORD] Not configured - simulating');
-            return { channel: 'discord', success: true, simulated: true };
+            return { channel: 'discord', success: false, error: 'Discord Webhook URL not configured. Please set DISCORD_WEBHOOK_URL or update the integration settings.' };
         }
 
         try {

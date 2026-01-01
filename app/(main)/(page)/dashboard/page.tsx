@@ -291,6 +291,14 @@ export default function DashboardPage() {
                                 description: `"${data.data.name}" has been added`,
                             })
                         }
+
+                        if (data.type === 'notification') {
+                            toast({
+                                title: data.data.title,
+                                description: data.data.message,
+                                variant: data.data.type === 'error' ? 'destructive' : 'default',
+                            })
+                        }
                     } catch (error) {
                         console.error('Error parsing SSE message:', error)
                     }

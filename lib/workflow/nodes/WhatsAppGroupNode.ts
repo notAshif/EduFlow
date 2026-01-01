@@ -37,12 +37,16 @@ export class WhatsAppGroupNode extends BaseNode {
 
             // Check connection status
             if (!service.isConnected()) {
-                return this.createErrorResult(
-                    context,
-                    startTime,
-                    'WhatsApp Web is not connected.',
-                    { hint: 'Go to Dashboard → Integration → WhatsApp Web to scan the QR Code.' }
-                );
+                return {
+                    nodeId: context.context.runId,
+                    success: false,
+                    error: 'WhatsApp Web is not connected.',
+                    output: {
+                        hint: 'Go to Dashboard → Integration → WhatsApp Web to scan the QR Code.',
+                        status: 'disconnected'
+                    },
+                    durationMs: Date.now() - startTime
+                };
             }
 
             // Send

@@ -2,6 +2,28 @@
 import { BaseNode } from '../node-base';
 import { NodeExecutionContext } from '@/lib/types';
 
+// Import comprehensive AI and Data Storage executors
+import {
+    executeAIAnalysis,
+    executeAISummarize as executeAISummarizeNew,
+    executeAITranslate,
+    executeSentimentAnalysis,
+    executeGenerateChart,
+    executeTrackAnalytics,
+    executePowerBI,
+} from './AINodesExecutor';
+
+import {
+    executeDatabaseQuery,
+    executeUpdateSpreadsheet,
+    executeReadFile,
+    executeWriteFile,
+    executeParseJSON,
+    executeTransformData,
+    executeSplit,
+    executeMerge,
+} from './DataStorageNodesExecutor';
+
 /**
  * GenericNode - A production-ready node that fetches real-time data
  * Handles various node types with actual API integrations
@@ -64,12 +86,14 @@ export class GenericNode extends BaseNode {
         try {
             // Handle specific node types with real API calls
             switch (this.nodeType) {
+                // ===== TRIGGERS =====
                 case 'trigger-schedule':
                     return this.executeTriggerSchedule(ctx);
 
                 case 'trigger-webhook':
                     return this.executeTriggerWebhook(input);
 
+                // ===== GOOGLE SUITE =====
                 case 'google-classroom':
                     return await this.executeGoogleClassroom(credentials);
 
@@ -91,12 +115,67 @@ export class GenericNode extends BaseNode {
                 case 'google-meet':
                     return await this.executeGoogleMeet(credentials);
 
+                // ===== EDUCATION =====
                 case 'grade-calculate':
                     return this.executeGradeCalculate(input);
 
-                case 'ai-summarize':
-                    return await this.executeAISummarize(credentials, input);
+                // ===== AI & ANALYTICS (NEW IMPLEMENTATIONS) =====
+                case 'ai-analysis':
+                case 'local-ai':
+                    return await executeAIAnalysis(this.config, credentials, input);
 
+                case 'ai-summarize':
+                    return await executeAISummarizeNew(this.config, credentials, input);
+
+                case 'ai-translate':
+                    return await executeAITranslate(this.config, credentials, input);
+
+                case 'sentiment-analysis':
+                case 'ai-sentiment':
+                    return await executeSentimentAnalysis(this.config, credentials, input);
+
+                case 'chart-generate':
+                case 'generate-chart':
+                    return await executeGenerateChart(this.config, credentials, input);
+
+                case 'analytics-track':
+                case 'track-analytics':
+                    return await executeTrackAnalytics(this.config, credentials, input, ctx);
+
+                case 'power-bi':
+                    return await executePowerBI(this.config, credentials, input);
+
+                // ===== DATA & STORAGE (NEW IMPLEMENTATIONS) =====
+                case 'database-query':
+                    return await executeDatabaseQuery(this.config, credentials, input, ctx);
+
+                case 'spreadsheet-update':
+                case 'update-spreadsheet':
+                    return await executeUpdateSpreadsheet(this.config, credentials, input);
+
+                case 'file-read':
+                case 'read-file':
+                    return await executeReadFile(this.config, credentials, input);
+
+                case 'file-write':
+                case 'write-file':
+                    return await executeWriteFile(this.config, credentials, input);
+
+                case 'json-parse':
+                case 'parse-json':
+                    return await executeParseJSON(this.config, credentials, input);
+
+                case 'transform':
+                case 'transform-data':
+                    return await executeTransformData(this.config, credentials, input);
+
+                case 'split':
+                    return await executeSplit(this.config, input);
+
+                case 'merge':
+                    return await executeMerge(this.config, input, ctx);
+
+                // ===== LOGIC & UTILITY =====
                 case 'loop':
                     return this.executeLoop(input);
 

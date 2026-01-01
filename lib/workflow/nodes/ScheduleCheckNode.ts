@@ -1,54 +1,61 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // lib/workflow/nodes/ScheduleCheckNode.ts
 import { BaseNode } from '../node-base';
 import { NodeExecutionContext, NodeResult } from '@/lib/types';
+import { prisma } from '@/lib/db';
 
 export class ScheduleCheckNode extends BaseNode {
     async execute(context: NodeExecutionContext): Promise<NodeResult> {
         const startTime = Date.now();
+        const orgId = context.context.organizationId;
 
         try {
             const { classId, teacherId, date, reminderMinutes } = this.config;
 
-            // TODO: Integrate with actual schedule/timetable system
-            // For now, simulate schedule check
-            const mockUpcomingClasses = [
-                {
-                    id: 'class_1',
-                    subject: 'Mathematics',
-                    time: '10:00 AM',
-                    room: 'Room 101',
-                    teacher: 'Prof. Smith'
-                },
-                {
-                    id: 'class_2',
-                    subject: 'Physics',
-                    time: '2:00 PM',
-                    room: 'Lab 203',
-                    teacher: 'Dr. Johnson'
-                }
-            ];
+            // Fetch actual schedule from database
+            const targetDate = date ? new Date(date) : new Date();
+            const dayOfWeek = targetDate.getDay(); // 0 is Sunday, 1 is Monday...
 
-            console.log(`[SCHEDULE] Checking schedule for ${date || 'today'}`);
-            console.log(`[SCHEDULE] Class ID: ${classId || 'All'}`);
-            console.log(`[SCHEDULE] Teacher ID: ${teacherId || 'All'}`);
-            console.log(`[SCHEDULE] Reminder: ${reminderMinutes || 15} minutes before`);
+            const whereClause: any = {
+                organizationId: orgId,
+                dayOfWeek: dayOfWeek
+            };
+
+            if (classId) whereClause.classId = classId;
+            if (teacherId) whereClause.teacherId = teacherId;
+
+            const schedules = await prisma.classSchedule.findMany({
+                where: whereClause,
+                orderBy: { startTime: 'asc' }
+            });
+
+            console.log(`[SCHEDULE] Checking schedule for day: ${dayOfWeek}, Org: ${orgId}`);
+            console.log(`[SCHEDULE] Found ${schedules.length} classes`);
+
+            const upcomingClasses = schedules.map(s => ({
+                id: s.id,
+                subject: s.subject,
+                time: `${s.startTime} - ${s.endTime}`,
+                room: 'N/A', // Room not in schema yet
+                teacher: s.teacherId || 'N/A'
+            }));
 
             return {
                 nodeId: context.context.runId,
                 success: true,
                 output: {
-                    date: date || new Date().toISOString().split('T')[0],
-                    upcomingClasses: mockUpcomingClasses,
+                    date: targetDate.toISOString().split('T')[0],
+                    dayOfWeek,
+                    upcomingClasses,
+                    count: upcomingClasses.length,
                     reminderMinutes: reminderMinutes || 15,
                     classId,
                     teacherId,
-                    timestamp: new Date().toISOString(),
-                    simulated: true
+                    timestamp: new Date().toISOString()
                 },
                 durationMs: Date.now() - startTime
             };
         } catch (error) {
+            console.error('[SCHEDULE] Check failed:', error);
             return {
                 nodeId: context.context.runId,
                 success: false,
@@ -59,7 +66,6 @@ export class ScheduleCheckNode extends BaseNode {
     }
 
     validate(config: Record<string, any>): void {
-        // All fields are optional for flexibility
         if (config.reminderMinutes && config.reminderMinutes < 0) {
             throw new Error('Reminder minutes must be positive');
         }

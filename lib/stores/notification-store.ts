@@ -21,7 +21,7 @@ interface NotificationStore {
 
     // Actions
     setNotifications: (notifications: Notification[]) => void
-    addNotification: (notification: Omit<Notification, 'id' | 'createdAt'>) => void
+    addNotification: (notification: Partial<Notification> & { title: string; message: string }) => void
     markAsRead: (id: string) => void
     markAllAsRead: () => void
     deleteNotification: (id: string) => void
@@ -114,9 +114,14 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
     },
 
     addNotification: (notification) => {
+        const { title, message, type = 'info', category = 'system' } = notification
         const newNotification: Notification = {
-            ...notification,
             id: `notif-${Date.now()}`,
+            title,
+            message,
+            type: type as any,
+            category: category as any,
+            read: false,
             createdAt: new Date(),
             time: 'Just now',
             date: 'Today',

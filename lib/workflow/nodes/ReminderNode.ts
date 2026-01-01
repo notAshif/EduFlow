@@ -135,8 +135,10 @@ export class ReminderNode extends BaseNode {
         const smtpPort = parseInt(creds.smtpPort || process.env.SMTP_PORT || '587');
 
         if (!smtpHost || !smtpUser || !smtpPass) {
-            console.warn('[REMINDER/EMAIL] SMTP not configured - simulating');
-            return { success: true };
+            return {
+                success: false,
+                error: 'SMTP not configured. Please add your SMTP credentials in the Integrations page or set SMTP_HOST, SMTP_USER, and SMTP_PASS environment variables.'
+            };
         }
 
         try {

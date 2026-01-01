@@ -137,6 +137,7 @@ export interface NodeExecutionContext {
     runId: string;
     organizationId: string;
     previousResults: NodeResult[];
+    userId?: string;
   };
   services: {
     credentials?: Record<string, any> | null;

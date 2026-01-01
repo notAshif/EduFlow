@@ -53,13 +53,17 @@ export class EmailSendNode extends BaseNode {
     if (!smtpHost || !smtpUser || !smtpPass) {
       console.warn('[EMAIL] SMTP not configured - simulating email send');
       return {
-        mock: true,
-        preview: `Would send email to ${to}`,
-        to,
-        subject,
-        body,
-        note: 'Configure SMTP in Integration page or set SMTP_* environment variables for real email sending',
-        timestamp: new Date().toISOString(),
+        nodeId: context.context.runId,
+        success: false, // Mark as false or at least not true if user expected real email
+        error: 'SMTP not configured. Please set up Gmail/Email in Integrations or set SMTP_* env variables.',
+        output: {
+          simulated: true,
+          preview: `Would send email to ${to}`,
+          to,
+          subject,
+          note: 'Configure SMTP in Integration page or set SMTP_* environment variables for real email sending',
+          timestamp: new Date().toISOString()
+        },
         durationMs: Date.now() - startTime,
       };
     }

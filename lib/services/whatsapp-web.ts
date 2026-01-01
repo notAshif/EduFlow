@@ -143,14 +143,7 @@ class WhatsAppWebService extends EventEmitter {
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
                     '--disable-dev-shm-usage',
-                    '--disable-accelerated-2d-canvas',
-                    '--no-first-run',
-                    '--no-zygote',
-                    '--disable-gpu',
-                    '--disable-web-security',
-                    '--disable-features=IsolateOrigins,site-per-process',
-                    '--disable-extensions',
-                    '--disable-component-update'
+                    '--disable-gpu'
                 ]
             };
 
@@ -217,10 +210,9 @@ class WhatsAppWebService extends EventEmitter {
                 puppeteerOpts.channel = 'chrome';
             }
 
-            // Absolute path for auth data
-            const authPath = (process.env.NODE_ENV === 'production' || process.env.VERCEL)
-                ? path.join(os.tmpdir(), '.wwebjs_auth')
-                : path.resolve(process.cwd(), '.wwebjs_auth');
+            // Absolute path for auth data - Using local tmp to avoid OneDrive locks
+            const authPath = path.join(os.tmpdir(), 'flowx_wwebjs_auth');
+            console.log(`[WHATSAPP-WEB] Local Auth Path: ${authPath}`);
 
             // Ensure directory exists
             if (!fs.existsSync(authPath)) {
@@ -245,13 +237,8 @@ class WhatsAppWebService extends EventEmitter {
 
             // Refine args specifically for Windows/Local environments
             if (os.platform() === 'win32') {
-                puppeteerOpts.args = [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    `--user-data-dir=${authPath}`
-                ];
-                // TEMP: Use visible browser to debug launch issues
-                puppeteerOpts.headless = false;
+                // Ensure absolute minimum flags and use the stable 'new' headless mode
+                puppeteerOpts.headless = 'new';
             }
 
             console.log('[WHATSAPP-WEB] Launching browser with options...', {

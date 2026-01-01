@@ -162,6 +162,27 @@ export default function WhatsAppWebPage() {
             </div>
 
             <div className="container mx-auto px-6 py-8">
+                {/* Persistence Info Banner */}
+                <Card className="mb-6 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 border-amber-200 dark:border-amber-800">
+                    <CardContent className="p-4">
+                        <div className="flex items-start gap-3">
+                            <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center shrink-0">
+                                <MessageCircle className="w-5 h-5 text-amber-600" />
+                            </div>
+                            <div className="flex-1">
+                                <h3 className="font-semibold text-amber-800 dark:text-amber-300">Session Persistence</h3>
+                                <p className="text-sm text-amber-700 dark:text-amber-400">
+                                    <strong>Local Development:</strong> Your WhatsApp session is saved locally and will persist between restarts.
+                                </p>
+                                <p className="text-xs text-amber-600/80 dark:text-amber-500 mt-1">
+                                    <strong>Vercel/Cloud:</strong> Due to serverless architecture limitations, you may need to re-scan the QR code after deployments or if the session expires.
+                                    Your integration status is synced to your account database.
+                                </p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Connection Status */}
                     <Card className="border-2">
